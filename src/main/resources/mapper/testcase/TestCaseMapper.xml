@@ -1,0 +1,132 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.zy.testpilotai.testcase.mapper.TestCaseMapper">
+
+    <resultMap id="TestCaseResultMap" type="com.zy.testpilotai.testcase.model.entity.TestCaseEntity">
+        <id property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="taskId" column="task_id"/>
+        <result property="versionName" column="version_name"/>
+        <result property="moduleName" column="module_name"/>
+        <result property="caseTitle" column="case_title"/>
+        <result property="priority" column="priority"/>
+        <result property="caseType" column="case_type"/>
+        <result property="precondition" column="precondition"/>
+        <result property="steps" column="steps"/>
+        <result property="expectedResult" column="expected_result"/>
+        <result property="testData" column="test_data"/>
+        <result property="sourceChunkIds" column="source_chunk_ids"/>
+        <result property="aiScore" column="ai_score"/>
+        <result property="reviewStatus" column="review_status"/>
+        <result property="deleted" column="deleted"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.zy.testpilotai.testcase.model.entity.TestCaseEntity"
+            useGeneratedKeys="true"
+            keyProperty="id"
+            keyColumn="id">
+        INSERT INTO test_case (
+        project_id,
+        task_id,
+        version_name,
+        module_name,
+        case_title,
+        priority,
+        case_type,
+        precondition,
+        steps,
+        expected_result,
+        test_data,
+        source_chunk_ids,
+        ai_score,
+        review_status,
+        deleted,
+        created_at,
+        updated_at
+        )
+        VALUES (
+        #{projectId},
+        #{taskId},
+        #{versionName},
+        #{moduleName},
+        #{caseTitle},
+        #{priority},
+        #{caseType},
+        #{precondition},
+        #{steps},
+        #{expectedResult},
+        #{testData},
+        #{sourceChunkIds},
+        #{aiScore},
+        #{reviewStatus},
+        false,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <select id="selectByTaskId" resultMap="TestCaseResultMap">
+        SELECT
+        id,
+        project_id,
+        task_id,
+        version_name,
+        module_name,
+        case_title,
+        priority,
+        case_type,
+        precondition,
+        steps,
+        expected_result,
+        test_data,
+        source_chunk_ids,
+        ai_score,
+        review_status,
+        deleted,
+        created_at,
+        updated_at
+        FROM test_case
+        WHERE task_id = #{taskId}
+        AND deleted = false
+        ORDER BY id ASC
+    </select>
+
+    <select id="selectByProject" resultMap="TestCaseResultMap">
+        SELECT
+        id,
+        project_id,
+        task_id,
+        version_name,
+        module_name,
+        case_title,
+        priority,
+        case_type,
+        precondition,
+        steps,
+        expected_result,
+        test_data,
+        source_chunk_ids,
+        ai_score,
+        review_status,
+        deleted,
+        created_at,
+        updated_at
+        FROM test_case
+        WHERE project_id = #{projectId}
+        AND deleted = false
+        <if test="versionName != null and versionName != ''">
+            AND version_name = #{versionName}
+        </if>
+        <if test="moduleName != null and moduleName != ''">
+            AND module_name = #{moduleName}
+        </if>
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>

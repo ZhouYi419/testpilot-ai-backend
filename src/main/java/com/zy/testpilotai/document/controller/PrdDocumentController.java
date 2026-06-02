@@ -2,6 +2,7 @@ package com.zy.testpilotai.document.controller;
 
 import com.zy.testpilotai.common.response.BaseResponse;
 import com.zy.testpilotai.common.response.ResultUtils;
+import com.zy.testpilotai.document.model.vo.PrdDocumentContentVO;
 import com.zy.testpilotai.document.model.vo.PrdDocumentVO;
 import com.zy.testpilotai.document.service.PrdDocumentService;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +51,26 @@ public class PrdDocumentController {
     public BaseResponse<PrdDocumentVO> getDocumentById(@PathVariable Long documentId) {
         return ResultUtils.success(
                 prdDocumentService.getDocumentById(documentId)
+        );
+    }
+
+    /**
+     * 手动解析 PRD 文档
+     */
+    @PostMapping("/api/documents/{documentId}/parse")
+    public BaseResponse<Boolean> parseDocument(@PathVariable Long documentId) {
+        return ResultUtils.success(
+                prdDocumentService.parseDocument(documentId)
+        );
+    }
+
+    /**
+     * 查看 PRD 解析后的文本内容
+     */
+    @GetMapping("/api/documents/{documentId}/content")
+    public BaseResponse<PrdDocumentContentVO> getDocumentContent(@PathVariable Long documentId) {
+        return ResultUtils.success(
+                prdDocumentService.getDocumentContent(documentId)
         );
     }
 

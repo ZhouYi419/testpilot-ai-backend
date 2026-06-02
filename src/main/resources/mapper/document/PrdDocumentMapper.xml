@@ -121,6 +121,37 @@
         ORDER BY created_at DESC
     </select>
 
+    <update id="updateParseStatus">
+        UPDATE prd_document
+        SET
+        parse_status = #{parseStatus},
+        error_message = #{errorMessage},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+        AND deleted = false
+    </update>
+
+    <update id="updateParsedContent">
+        UPDATE prd_document
+        SET
+        parse_status = #{parseStatus},
+        parsed_content = #{parsedContent},
+        error_message = #{errorMessage},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+        AND deleted = false
+    </update>
+
+    <update id="updateIndexStatus">
+        UPDATE prd_document
+        SET
+        index_status = #{indexStatus},
+        error_message = #{errorMessage},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+        AND deleted = false
+    </update>
+
     <update id="logicDeleteById">
         UPDATE prd_document
         SET

@@ -23,6 +23,8 @@
         <mybatis.version>3.0.5</mybatis.version>
         <springdoc.version>2.8.15</springdoc.version>
         <minio.version>9.0.1</minio.version>
+        <tika.version>3.3.1</tika.version>
+        <poi.version>5.5.1</poi.version>
     </properties>
 
     <dependencies>
@@ -99,6 +101,27 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+        </dependency>
+
+        <!-- Apache Tika Core：文档类型检测、基础解析能力 -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-core</artifactId>
+            <version>${tika.version}</version>
+        </dependency>
+
+        <!-- Apache Tika Standard Parsers：PDF、Word、Excel、PPT 等标准文档解析器 -->
+        <dependency>
+            <groupId>org.apache.tika</groupId>
+            <artifactId>tika-parsers-standard-package</artifactId>
+            <version>${tika.version}</version>
+        </dependency>
+
+        <!-- Apache POI：用于 Word / Excel / PPT 等 Office 文档兜底解析 -->
+        <dependency>
+            <groupId>org.apache.poi</groupId>
+            <artifactId>poi-ooxml</artifactId>
+            <version>${poi.version}</version>
         </dependency>
 
     </dependencies>

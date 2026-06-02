@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.zy.testpilotai.testcase.mapper.TestcaseGenerationTaskMapper">
+
+    <resultMap id="TaskResultMap" type="com.zy.testpilotai.testcase.model.entity.TestcaseGenerationTaskEntity">
+        <id property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="versionName" column="version_name"/>
+        <result property="moduleName" column="module_name"/>
+        <result property="requirementText" column="requirement_text"/>
+        <result property="status" column="status"/>
+        <result property="totalCases" column="total_cases"/>
+        <result property="modelName" column="model_name"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.zy.testpilotai.testcase.model.entity.TestcaseGenerationTaskEntity"
+            useGeneratedKeys="true"
+            keyProperty="id"
+            keyColumn="id">
+        INSERT INTO testcase_generation_task (
+        project_id,
+        version_name,
+        module_name,
+        requirement_text,
+        status,
+        total_cases,
+        model_name,
+        error_message,
+        created_at,
+        updated_at
+        )
+        VALUES (
+        #{projectId},
+        #{versionName},
+        #{moduleName},
+        #{requirementText},
+        #{status},
+        #{totalCases},
+        #{modelName},
+        #{errorMessage},
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <select id="selectById" resultMap="TaskResultMap">
+        SELECT
+        id,
+        project_id,
+        version_name,
+        module_name,
+        requirement_text,
+        status,
+        total_cases,
+        model_name,
+        error_message,
+        created_at,
+        updated_at
+        FROM testcase_generation_task
+        WHERE id = #{id}
+        LIMIT 1
+    </select>
+
+    <update id="updateStatus">
+        UPDATE testcase_generation_task
+        SET
+        status = #{status},
+        total_cases = #{totalCases},
+        model_name = #{modelName},
+        error_message = #{errorMessage},
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+    </update>
+
+</mapper>
