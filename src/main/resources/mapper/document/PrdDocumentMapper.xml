@@ -1,0 +1,133 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper
+        PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "https://mybatis.org/dtd/mybatis-3-mapper.dtd">
+
+<mapper namespace="com.zy.testpilotai.document.mapper.PrdDocumentMapper">
+
+    <resultMap id="PrdDocumentResultMap" type="com.zy.testpilotai.document.model.entity.PrdDocumentEntity">
+        <id property="id" column="id"/>
+        <result property="projectId" column="project_id"/>
+        <result property="versionName" column="version_name"/>
+        <result property="fileName" column="file_name"/>
+        <result property="originalFileName" column="original_file_name"/>
+        <result property="filePath" column="file_path"/>
+        <result property="fileType" column="file_type"/>
+        <result property="fileSize" column="file_size"/>
+        <result property="parseStatus" column="parse_status"/>
+        <result property="indexStatus" column="index_status"/>
+        <result property="parsedContent" column="parsed_content"/>
+        <result property="contentHash" column="content_hash"/>
+        <result property="description" column="description"/>
+        <result property="errorMessage" column="error_message"/>
+        <result property="deleted" column="deleted"/>
+        <result property="createdAt" column="created_at"/>
+        <result property="updatedAt" column="updated_at"/>
+    </resultMap>
+
+    <insert id="insert"
+            parameterType="com.zy.testpilotai.document.model.entity.PrdDocumentEntity"
+            useGeneratedKeys="true"
+            keyProperty="id"
+            keyColumn="id">
+        INSERT INTO prd_document (
+        project_id,
+        version_name,
+        file_name,
+        original_file_name,
+        file_path,
+        file_type,
+        file_size,
+        parse_status,
+        index_status,
+        parsed_content,
+        content_hash,
+        description,
+        error_message,
+        deleted,
+        created_at,
+        updated_at
+        )
+        VALUES (
+        #{projectId},
+        #{versionName},
+        #{fileName},
+        #{originalFileName},
+        #{filePath},
+        #{fileType},
+        #{fileSize},
+        #{parseStatus},
+        #{indexStatus},
+        #{parsedContent},
+        #{contentHash},
+        #{description},
+        #{errorMessage},
+        false,
+        CURRENT_TIMESTAMP,
+        CURRENT_TIMESTAMP
+        )
+    </insert>
+
+    <select id="selectById" resultMap="PrdDocumentResultMap">
+        SELECT
+        id,
+        project_id,
+        version_name,
+        file_name,
+        original_file_name,
+        file_path,
+        file_type,
+        file_size,
+        parse_status,
+        index_status,
+        parsed_content,
+        content_hash,
+        description,
+        error_message,
+        deleted,
+        created_at,
+        updated_at
+        FROM prd_document
+        WHERE id = #{id}
+        AND deleted = false
+        LIMIT 1
+    </select>
+
+    <select id="selectByProjectId" resultMap="PrdDocumentResultMap">
+        SELECT
+        id,
+        project_id,
+        version_name,
+        file_name,
+        original_file_name,
+        file_path,
+        file_type,
+        file_size,
+        parse_status,
+        index_status,
+        parsed_content,
+        content_hash,
+        description,
+        error_message,
+        deleted,
+        created_at,
+        updated_at
+        FROM prd_document
+        WHERE project_id = #{projectId}
+        AND deleted = false
+        <if test="versionName != null and versionName != ''">
+            AND version_name = #{versionName}
+        </if>
+        ORDER BY created_at DESC
+    </select>
+
+    <update id="logicDeleteById">
+        UPDATE prd_document
+        SET
+        deleted = true,
+        updated_at = CURRENT_TIMESTAMP
+        WHERE id = #{id}
+        AND deleted = false
+    </update>
+
+</mapper>
