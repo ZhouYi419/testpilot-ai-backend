@@ -92,6 +92,12 @@ public class KnowledgeSearchServiceImpl implements KnowledgeSearchService {
         vo.setChunkIndex(entity.getChunkIndex());
         vo.setTitle(entity.getTitle());
         vo.setContent(entity.getContent());
+
+        vo.setChunkType(entity.getChunkType());
+        vo.setSectionPath(entity.getSectionPath());
+        vo.setModuleName(entity.getModuleName());
+        vo.setRequirementId(entity.getRequirementId());
+
         vo.setDistance(entity.getDistance());
 
         if (entity.getDistance() != null) {

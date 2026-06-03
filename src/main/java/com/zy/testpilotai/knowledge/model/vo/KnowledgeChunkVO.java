@@ -23,6 +23,24 @@ public class KnowledgeChunkVO {
 
     private Integer tokenCount;
 
+    private String chunkType;
+
+    private Long parentChunkId;
+
+    private String sectionPath;
+
+    private String moduleName;
+
+    private String requirementId;
+
+    private Integer startPosition;
+
+    private Integer endPosition;
+
+    private String sourceType;
+
+    private String metadata;
+
     private String embeddingModel;
 
     private String embeddingStatus;

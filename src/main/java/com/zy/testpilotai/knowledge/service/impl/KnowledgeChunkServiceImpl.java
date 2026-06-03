@@ -69,6 +69,16 @@ public class KnowledgeChunkServiceImpl implements KnowledgeChunkService {
                 entity.setTitle(textChunk.getTitle());
                 entity.setContent(textChunk.getContent());
                 entity.setTokenCount(textChunk.getTokenCount());
+
+                entity.setChunkType(textChunk.getChunkType());
+                entity.setParentChunkId(textChunk.getParentChunkId());
+                entity.setSectionPath(textChunk.getSectionPath());
+                entity.setModuleName(textChunk.getModuleName());
+                entity.setRequirementId(textChunk.getRequirementId());
+                entity.setStartPosition(textChunk.getStartPosition());
+                entity.setEndPosition(textChunk.getEndPosition());
+                entity.setSourceType("PRD");
+
                 entity.setMetadata(buildMetadata(document, textChunk));
 
                 knowledgeChunkMapper.insert(entity);
@@ -105,19 +115,32 @@ public class KnowledgeChunkServiceImpl implements KnowledgeChunkService {
 
     private String buildMetadata(PrdDocumentEntity document, TextChunk textChunk) {
         return """
-                {
-                  "documentId": %d,
-                  "projectId": %d,
-                  "versionName": "%s",
-                  "chunkIndex": %d,
-                  "originalFileName": "%s"
-                }
-                """.formatted(
+            {
+              "documentId": %d,
+              "projectId": %d,
+              "versionName": "%s",
+              "chunkIndex": %d,
+              "originalFileName": "%s",
+              "chunkType": "%s",
+              "sectionPath": "%s",
+              "moduleName": "%s",
+              "requirementId": "%s",
+              "startPosition": %d,
+              "endPosition": %d,
+              "sourceType": "PRD"
+            }
+            """.formatted(
                 document.getId(),
                 document.getProjectId(),
                 escapeJson(document.getVersionName()),
                 textChunk.getChunkIndex(),
-                escapeJson(document.getOriginalFileName())
+                escapeJson(document.getOriginalFileName()),
+                escapeJson(textChunk.getChunkType()),
+                escapeJson(textChunk.getSectionPath()),
+                escapeJson(textChunk.getModuleName()),
+                escapeJson(textChunk.getRequirementId()),
+                textChunk.getStartPosition() == null ? 0 : textChunk.getStartPosition(),
+                textChunk.getEndPosition() == null ? 0 : textChunk.getEndPosition()
         );
     }
 
@@ -138,6 +161,17 @@ public class KnowledgeChunkServiceImpl implements KnowledgeChunkService {
         vo.setTitle(entity.getTitle());
         vo.setContent(entity.getContent());
         vo.setTokenCount(entity.getTokenCount());
+
+        vo.setChunkType(entity.getChunkType());
+        vo.setParentChunkId(entity.getParentChunkId());
+        vo.setSectionPath(entity.getSectionPath());
+        vo.setModuleName(entity.getModuleName());
+        vo.setRequirementId(entity.getRequirementId());
+        vo.setStartPosition(entity.getStartPosition());
+        vo.setEndPosition(entity.getEndPosition());
+        vo.setSourceType(entity.getSourceType());
+        vo.setMetadata(entity.getMetadata());
+
         vo.setEmbeddingModel(entity.getEmbeddingModel());
         vo.setEmbeddingStatus(entity.getEmbeddingStatus());
         vo.setEmbeddingErrorMessage(entity.getEmbeddingErrorMessage());

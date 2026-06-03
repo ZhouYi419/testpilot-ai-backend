@@ -15,10 +15,21 @@
         <result property="content" column="content"/>
         <result property="tokenCount" column="token_count"/>
         <result property="metadata" column="metadata"/>
+
         <result property="embedding" column="embedding"/>
         <result property="embeddingModel" column="embedding_model"/>
         <result property="embeddingStatus" column="embedding_status"/>
         <result property="embeddingErrorMessage" column="embedding_error_message"/>
+
+        <result property="chunkType" column="chunk_type"/>
+        <result property="parentChunkId" column="parent_chunk_id"/>
+        <result property="sectionPath" column="section_path"/>
+        <result property="moduleName" column="module_name"/>
+        <result property="requirementId" column="requirement_id"/>
+        <result property="startPosition" column="start_position"/>
+        <result property="endPosition" column="end_position"/>
+        <result property="sourceType" column="source_type"/>
+
         <result property="distance" column="distance"/>
         <result property="enabled" column="enabled"/>
         <result property="deleted" column="deleted"/>
@@ -40,6 +51,14 @@
         content,
         token_count,
         metadata,
+        chunk_type,
+        parent_chunk_id,
+        section_path,
+        module_name,
+        requirement_id,
+        start_position,
+        end_position,
+        source_type,
         embedding_status,
         enabled,
         deleted,
@@ -55,6 +74,14 @@
         #{content},
         #{tokenCount},
         #{metadata},
+        #{chunkType},
+        #{parentChunkId},
+        #{sectionPath},
+        #{moduleName},
+        #{requirementId},
+        #{startPosition},
+        #{endPosition},
+        #{sourceType},
         'PENDING',
         true,
         false,
@@ -78,10 +105,19 @@
         embedding_model,
         embedding_status,
         embedding_error_message,
+        chunk_type,
+        parent_chunk_id,
+        section_path,
+        module_name,
+        requirement_id,
+        start_position,
+        end_position,
+        source_type,
         enabled,
         deleted,
         created_at,
-        updated_at
+        updated_at,
+        NULL::double precision AS distance
         FROM knowledge_chunk
         WHERE document_id = #{documentId}
         AND enabled = true
@@ -104,10 +140,19 @@
         embedding_model,
         embedding_status,
         embedding_error_message,
+        chunk_type,
+        parent_chunk_id,
+        section_path,
+        module_name,
+        requirement_id,
+        start_position,
+        end_position,
+        source_type,
         enabled,
         deleted,
         created_at,
-        updated_at
+        updated_at,
+        NULL::double precision AS distance
         FROM knowledge_chunk
         WHERE document_id = #{documentId}
         AND enabled = true
@@ -118,6 +163,47 @@
         OR embedding_status != 'EMBEDDED'
         )
         ORDER BY chunk_index ASC
+    </select>
+
+    <select id="searchSimilarChunks" resultMap="KnowledgeChunkResultMap">
+        SELECT
+        id,
+        project_id,
+        document_id,
+        version_name,
+        chunk_index,
+        title,
+        content,
+        token_count,
+        metadata,
+        embedding::text AS embedding,
+        embedding_model,
+        embedding_status,
+        embedding_error_message,
+        chunk_type,
+        parent_chunk_id,
+        section_path,
+        module_name,
+        requirement_id,
+        start_position,
+        end_position,
+        source_type,
+        enabled,
+        deleted,
+        created_at,
+        updated_at,
+        embedding &lt;=&gt; #{queryEmbedding}::vector AS distance
+        FROM knowledge_chunk
+        WHERE project_id = #{projectId}
+        AND enabled = true
+        AND deleted = false
+        AND embedding IS NOT NULL
+        AND embedding_status = 'EMBEDDED'
+        <if test="versionName != null and versionName != ''">
+            AND version_name = #{versionName}
+        </if>
+        ORDER BY embedding &lt;=&gt; #{queryEmbedding}::vector
+        LIMIT #{topK}
     </select>
 
     <update id="updateEmbeddingStatus">
@@ -158,39 +244,6 @@
         WHERE document_id = #{documentId}
         AND enabled = true
         AND deleted = false
-    </select>
-
-    <select id="searchSimilarChunks" resultMap="KnowledgeChunkResultMap">
-        SELECT
-        id,
-        project_id,
-        document_id,
-        version_name,
-        chunk_index,
-        title,
-        content,
-        token_count,
-        metadata,
-        embedding::text AS embedding,
-        embedding_model,
-        embedding_status,
-        embedding_error_message,
-        enabled,
-        deleted,
-        created_at,
-        updated_at,
-        embedding &lt;=&gt; #{queryEmbedding}::vector AS distance
-        FROM knowledge_chunk
-        WHERE project_id = #{projectId}
-        AND enabled = true
-        AND deleted = false
-        AND embedding IS NOT NULL
-        AND embedding_status = 'EMBEDDED'
-        <if test="versionName != null and versionName != ''">
-            AND version_name = #{versionName}
-        </if>
-        ORDER BY embedding &lt;=&gt; #{queryEmbedding}::vector
-        LIMIT #{topK}
     </select>
 
 </mapper>

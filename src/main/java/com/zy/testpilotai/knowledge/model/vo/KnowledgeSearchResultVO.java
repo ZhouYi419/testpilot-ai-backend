@@ -19,14 +19,19 @@ public class KnowledgeSearchResultVO {
 
     private String content;
 
+    private String chunkType;
+
+    private String sectionPath;
+
+    private String moduleName;
+
+    private String requirementId;
+
     /**
      * cosine distance，越小越相似
      */
     private Double distance;
 
-    /**
-     * 简单换算后的相似度：1 - distance
-     */
     private Double similarity;
 
     private String metadata;

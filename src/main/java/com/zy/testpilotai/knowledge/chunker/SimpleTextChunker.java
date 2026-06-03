@@ -45,12 +45,22 @@ public class SimpleTextChunker implements TextChunker {
             String content = normalizedText.substring(start, end).trim();
 
             if (StringUtils.hasText(content)) {
-                chunks.add(new TextChunk(
-                        chunkIndex,
-                        extractTitle(content),
-                        content,
-                        estimateTokenCount(content)
-                ));
+                TextChunk chunk = new TextChunk();
+                chunk.setChunkIndex(chunkIndex);
+                chunk.setTitle(extractTitle(content));
+                chunk.setContent(content);
+                chunk.setTokenCount(estimateTokenCount(content));
+
+                chunk.setChunkType("PARAGRAPH");
+                chunk.setSectionPath(chunk.getTitle());
+                chunk.setModuleName(chunk.getTitle());
+                chunk.setRequirementId(null);
+                chunk.setStartPosition(start);
+                chunk.setEndPosition(end);
+                chunk.setParentChunkId(null);
+                chunk.setMetadata(buildMetadata(chunk));
+
+                chunks.add(chunk);
                 chunkIndex++;
             }
 
@@ -62,6 +72,34 @@ public class SimpleTextChunker implements TextChunker {
         }
 
         return chunks;
+    }
+
+    private String buildMetadata(TextChunk chunk) {
+        return """
+            {
+              "chunkType": "%s",
+              "sectionPath": "%s",
+              "moduleName": "%s",
+              "requirementId": "%s",
+              "startPosition": %d,
+              "endPosition": %d,
+              "sourceType": "PRD"
+            }
+            """.formatted(
+                escapeJson(chunk.getChunkType()),
+                escapeJson(chunk.getSectionPath()),
+                escapeJson(chunk.getModuleName()),
+                escapeJson(chunk.getRequirementId()),
+                chunk.getStartPosition() == null ? 0 : chunk.getStartPosition(),
+                chunk.getEndPosition() == null ? 0 : chunk.getEndPosition()
+        );
+    }
+
+    private String escapeJson(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value.replace("\\", "\\\\").replace("\"", "\\\"");
     }
 
     private String normalize(String text) {

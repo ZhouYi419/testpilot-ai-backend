@@ -35,6 +35,28 @@ public class KnowledgeChunkEntity {
 
     private String embeddingErrorMessage;
 
+    /**
+     * SECTION / REQUIREMENT / TABLE / PARAGRAPH
+     */
+    private String chunkType;
+
+    private Long parentChunkId;
+
+    private String sectionPath;
+
+    private String moduleName;
+
+    private String requirementId;
+
+    private Integer startPosition;
+
+    private Integer endPosition;
+
+    private String sourceType;
+
+    /**
+     * 向量距离，检索时临时字段，不是表字段
+     */
     private Double distance;
 
     private Boolean enabled;
