@@ -1,13 +1,18 @@
 package com.zy.testpilotai.testcase.prompt;
 
 import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
+import com.zy.testpilotai.skill.service.SkillDefinitionService;
 import com.zy.testpilotai.testcase.model.entity.TestCase;
 import com.zy.testpilotai.testcase.model.entity.TestCaseGenerateTask;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class TestCaseReviewPromptBuilder {
+
+    private final SkillDefinitionService skillDefinitionService;
 
     /**
      * 构建质量评审系统提示词。
@@ -65,7 +70,15 @@ public class TestCaseReviewPromptBuilder {
                     .append("自动化建议：").append(testCase.getAutomationSuggestion()).append("\n\n");
         }
 
-        builder.append("【评分规则】\n")
+        /*
+         * 从 Skill 中心读取评分规则。
+         * 任务表里的 selectedSkills 是 JSON 字符串。
+         */
+        builder.append("【Skill 质量评分规则】\n")
+                .append(skillDefinitionService.buildReviewRubricPromptFromJson(task.getSelectedSkills()))
+                .append("\n\n");
+
+        builder.append("【基础评分规则】\n")
                 .append("请按 100 分制评分：\n")
                 .append("1. 主流程覆盖：20 分\n")
                 .append("2. 异常流程覆盖：20 分\n")
@@ -163,6 +176,10 @@ public class TestCaseReviewPromptBuilder {
 
         builder.append("\n【质量评审发现的缺失测试点】\n")
                 .append(missingPoints)
+                .append("\n\n");
+
+        builder.append("【Skill 补全规则】\n")
+                .append(skillDefinitionService.buildGenerationSkillPromptFromJson(task.getSelectedSkills()))
                 .append("\n\n");
 
         builder.append("【知识库上下文】\n")

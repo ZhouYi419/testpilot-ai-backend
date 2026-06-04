@@ -4,13 +4,17 @@ import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.requirement.model.dto.ChangeImpactAnalyzeRequest;
 import com.zy.testpilotai.requirement.model.dto.IncrementalTestCaseGenerateRequest;
 import com.zy.testpilotai.requirement.model.entity.RequirementChangeAnalysisTask;
+import com.zy.testpilotai.skill.service.SkillDefinitionService;
 import com.zy.testpilotai.testcase.model.entity.TestCase;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
 import java.util.List;
 
 @Component
+@RequiredArgsConstructor
 public class RequirementChangePromptBuilder {
+
+    private final SkillDefinitionService skillDefinitionService;
 
     /**
      * 构建影响分析系统提示词。
@@ -195,15 +199,12 @@ public class RequirementChangePromptBuilder {
             builder.append("\n");
         }
 
-        builder.append("【启用的测试 Skill】\n");
-        if (CollectionUtils.isEmpty(request.getSelectedSkills())) {
-            builder.append("默认启用：增量功能测试、异常测试、边界测试、数据一致性测试、回归测试。\n\n");
-        } else {
-            for (String skill : request.getSelectedSkills()) {
-                builder.append("- ").append(skill).append("\n");
-            }
-            builder.append("\n");
-        }
+        /*
+         * 从 Skill 中心读取增量用例生成规则。
+         */
+        builder.append("【启用的测试 Skill】\n")
+                .append(skillDefinitionService.buildGenerationSkillPrompt(request.getSelectedSkills()))
+                .append("\n\n");
 
         builder.append("【生成要求】\n")
                 .append("请生成目标版本的新测试用例，至少包含：\n")

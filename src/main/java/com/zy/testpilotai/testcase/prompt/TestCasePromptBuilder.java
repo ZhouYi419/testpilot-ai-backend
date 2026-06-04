@@ -1,12 +1,16 @@
 package com.zy.testpilotai.testcase.prompt;
 
 import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
+import com.zy.testpilotai.skill.service.SkillDefinitionService;
 import com.zy.testpilotai.testcase.model.dto.TestCaseGenerateRequest;
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
-import org.springframework.util.CollectionUtils;
 
 @Component
+@RequiredArgsConstructor
 public class TestCasePromptBuilder {
+
+    private final SkillDefinitionService skillDefinitionService;
 
     /**
      * 构建系统提示词。
@@ -31,7 +35,7 @@ public class TestCasePromptBuilder {
      *
      * 用户提示词包含：
      * 1. 用户生成目标
-     * 2. 选择的测试 Skill
+     * 2. Skill 中心读取出来的测试设计规则
      * 3. RAG 召回上下文
      * 4. 输出 JSON Schema
      */
@@ -48,21 +52,15 @@ public class TestCasePromptBuilder {
                 .append("模块编码：").append(request.getModuleCode() == null ? "不限制" : request.getModuleCode()).append("\n")
                 .append("生成类型：").append(request.getGenerateType()).append("\n\n");
 
-        builder.append("【启用的测试 Skill】\n");
-        if (CollectionUtils.isEmpty(request.getSelectedSkills())) {
-            builder.append("默认启用：功能测试、异常测试、边界测试、数据一致性测试、风险场景测试\n\n");
-        } else {
-            for (String skill : request.getSelectedSkills()) {
-                builder.append("- ").append(skill).append("\n");
-            }
-            builder.append("\n");
-        }
+        builder.append("【启用的测试 Skill】\n")
+                .append(skillDefinitionService.buildGenerationSkillPrompt(request.getSelectedSkills()))
+                .append("\n\n");
 
         builder.append("【知识库上下文】\n")
                 .append(ragContext.getContextText())
                 .append("\n\n");
 
-        builder.append("【测试设计要求】\n")
+        builder.append("【测试设计基本要求】\n")
                 .append("请至少从以下维度生成测试用例：\n")
                 .append("1. 正常主流程\n")
                 .append("2. 异常流程\n")
