@@ -11,7 +11,9 @@ public enum ErrorCode {
     FILE_UPLOAD_ERROR(50010, "文件上传失败"),
     AI_EMBEDDING_ERROR(50020, "Embedding 调用失败"),
     AI_CHAT_ERROR(50030, "LLM 调用失败"),
-    AI_OUTPUT_PARSE_ERROR(50040, "AI 输出解析失败");
+    AI_OUTPUT_PARSE_ERROR(50040, "AI 输出解析失败"),
+    TESTCASE_REVIEW_ERROR(50050, "测试用例质量评审失败"),
+    TESTCASE_COMPLETE_ERROR(50060, "缺失测试用例补全失败"),
     ;
 
     private final int code;

@@ -2,11 +2,16 @@ package com.zy.testpilotai.testcase.controller;
 
 import com.zy.testpilotai.common.response.BaseResponse;
 import com.zy.testpilotai.common.response.ResultUtils;
+import com.zy.testpilotai.testcase.model.dto.MissingCaseCompleteRequest;
 import com.zy.testpilotai.testcase.model.dto.TestCaseGenerateRequest;
 import com.zy.testpilotai.testcase.model.dto.TestCasePageRequest;
+import com.zy.testpilotai.testcase.model.dto.TestCaseReviewRequest;
+import com.zy.testpilotai.testcase.model.vo.MissingCaseCompleteResultVO;
 import com.zy.testpilotai.testcase.model.vo.TestCaseGenerateResultVO;
+import com.zy.testpilotai.testcase.model.vo.TestCaseQualityReviewResultVO;
 import com.zy.testpilotai.testcase.model.vo.TestCaseVO;
 import com.zy.testpilotai.testcase.service.TestCaseGenerateService;
+import com.zy.testpilotai.testcase.service.TestCaseQualityService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
@@ -18,6 +23,8 @@ import java.util.List;
 public class TestCaseController {
 
     private final TestCaseGenerateService testCaseGenerateService;
+
+    private final TestCaseQualityService testCaseQualityService;
 
     /**
      * 基于知识库生成测试用例。
@@ -37,5 +44,25 @@ public class TestCaseController {
             @RequestBody TestCasePageRequest request
     ) {
         return ResultUtils.success(testCaseGenerateService.list(request));
+    }
+
+    /**
+     * 对某个生成任务下的测试用例进行质量评审。
+     */
+    @PostMapping("/review")
+    public BaseResponse<TestCaseQualityReviewResultVO> review(
+            @RequestBody @Valid TestCaseReviewRequest request
+    ) {
+        return ResultUtils.success(testCaseQualityService.review(request));
+    }
+
+    /**
+     * 根据质量评审结果补全缺失测试用例。
+     */
+    @PostMapping("/complete-missing")
+    public BaseResponse<MissingCaseCompleteResultVO> completeMissing(
+            @RequestBody @Valid MissingCaseCompleteRequest request
+    ) {
+        return ResultUtils.success(testCaseQualityService.completeMissing(request));
     }
 }
