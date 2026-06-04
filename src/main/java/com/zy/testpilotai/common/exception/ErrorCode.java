@@ -10,6 +10,8 @@ public enum ErrorCode {
     SYSTEM_ERROR(50000, "系统内部异常"),
     FILE_UPLOAD_ERROR(50010, "文件上传失败"),
     AI_EMBEDDING_ERROR(50020, "Embedding 调用失败"),
+    AI_CHAT_ERROR(50030, "LLM 调用失败"),
+    AI_OUTPUT_PARSE_ERROR(50040, "AI 输出解析失败");
     ;
 
     private final int code;

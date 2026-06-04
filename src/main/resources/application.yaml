@@ -43,7 +43,6 @@ springdoc:
 
 ai:
   embedding:
-    # 当前 Embedding 提供方
     provider: dashscope
 
     # 通用维度配置
@@ -66,3 +65,16 @@ ai:
 
       # 请求超时时间，单位秒
       timeout-seconds: 60
+
+    chat:
+      provider: dashscope
+
+      mock:
+        model-name: mock-qwen-plus
+
+      dashscope:
+        api-key: ${DASHSCOPE_API_KEY:}
+        endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+        model-name: qwen-plus
+        timeout-seconds: 120
+        temperature: 0.2
