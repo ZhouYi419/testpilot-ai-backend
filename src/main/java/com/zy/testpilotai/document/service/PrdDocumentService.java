@@ -1,21 +1,17 @@
 package com.zy.testpilotai.document.service;
 
-import com.zy.testpilotai.document.model.vo.PrdDocumentContentVO;
+import com.zy.testpilotai.document.model.dto.PrdUploadRequest;
 import com.zy.testpilotai.document.model.vo.PrdDocumentVO;
-import org.springframework.web.multipart.MultipartFile;
 import java.util.List;
 
 public interface PrdDocumentService {
+    /**
+     * 上传prd文件
+     */
+    PrdDocumentVO upload(PrdUploadRequest request);
 
-    Long uploadDocument(Long projectId, String versionName, String description, MultipartFile file);
-
-    List<PrdDocumentVO> listDocuments(Long projectId, String versionName);
-
-    PrdDocumentVO getDocumentById(Long documentId);
-
-    PrdDocumentContentVO getDocumentContent(Long documentId);
-
-    Boolean parseDocument(Long documentId);
-
-    Boolean deleteDocument(Long documentId);
+    /**
+     * 查询prd列表
+     */
+    List<PrdDocumentVO> listByProjectId(Long projectId);
 }

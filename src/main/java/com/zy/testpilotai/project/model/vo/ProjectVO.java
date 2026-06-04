@@ -3,23 +3,25 @@ package com.zy.testpilotai.project.model.vo;
 import lombok.Data;
 import java.time.LocalDateTime;
 
-/**
- * 项目展示对象
- */
 @Data
 public class ProjectVO {
 
     private Long id;
 
-    private String name;
+    /**
+     * 项目名称
+     */
+    private String projectName;
 
+    /**
+     * 项目描述
+     */
     private String description;
 
-    private String ownerName;
-
+    /**
+     * 状态
+     */
     private Integer status;
 
-    private LocalDateTime createdAt;
-
-    private LocalDateTime updatedAt;
+    private LocalDateTime createTime;
 }

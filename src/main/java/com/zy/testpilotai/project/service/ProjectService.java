@@ -1,20 +1,23 @@
 package com.zy.testpilotai.project.service;
 
-import com.zy.testpilotai.common.model.PageResult;
 import com.zy.testpilotai.project.model.dto.ProjectCreateRequest;
-import com.zy.testpilotai.project.model.dto.ProjectQueryRequest;
-import com.zy.testpilotai.project.model.dto.ProjectUpdateRequest;
 import com.zy.testpilotai.project.model.vo.ProjectVO;
+import java.util.List;
 
 public interface ProjectService {
 
-    Long createProject(ProjectCreateRequest request);
+    /**
+     * 创建项目
+     */
+    ProjectVO create(ProjectCreateRequest request);
 
-    ProjectVO getProjectById(Long id);
+    /**
+     * 根据id查询项目
+     */
+    ProjectVO getById(Long id);
 
-    PageResult<ProjectVO> pageProjects(ProjectQueryRequest request);
-
-    Boolean updateProject(ProjectUpdateRequest request);
-
-    Boolean deleteProject(Long id);
+    /**
+     * 获取项目列表
+     */
+    List<ProjectVO> list();
 }
