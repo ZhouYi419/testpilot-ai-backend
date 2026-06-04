@@ -328,6 +328,15 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
                 testCase.setCreateTime(LocalDateTime.now());
                 testCase.setUpdateTime(LocalDateTime.now());
 
+                // 补全出来的用例默认不是重复用例
+                testCase.setDuplicateStatus("NORMAL");
+                testCase.setDuplicateOfCaseId(null);
+                testCase.setDuplicateScore(null);
+                testCase.setDuplicateReason(null);
+
+                // 质量评审后补全的用例来源标记为 AI_COMPLETED
+                testCase.setSourceType("AI_COMPLETED");
+
                 validateTestCase(testCase);
                 result.add(testCase);
             }
@@ -435,6 +444,11 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
         vo.setAutomationSuggestion(testCase.getAutomationSuggestion());
         vo.setQualityScore(testCase.getQualityScore());
         vo.setCreateTime(testCase.getCreateTime());
+        vo.setDuplicateStatus(testCase.getDuplicateStatus());
+        vo.setDuplicateOfCaseId(testCase.getDuplicateOfCaseId());
+        vo.setDuplicateScore(testCase.getDuplicateScore());
+        vo.setDuplicateReason(testCase.getDuplicateReason());
+        vo.setSourceType(testCase.getSourceType());
 
         return vo;
     }

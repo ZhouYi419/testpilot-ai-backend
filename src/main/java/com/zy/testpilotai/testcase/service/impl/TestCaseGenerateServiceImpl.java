@@ -244,6 +244,15 @@ public class TestCaseGenerateServiceImpl implements TestCaseGenerateService {
                 testCase.setCreateTime(LocalDateTime.now());
                 testCase.setUpdateTime(LocalDateTime.now());
 
+                // 默认不是重复用例
+                testCase.setDuplicateStatus("NORMAL");
+                testCase.setDuplicateOfCaseId(null);
+                testCase.setDuplicateScore(null);
+                testCase.setDuplicateReason(null);
+
+                // 首次生成的用例来源标记为 AI_GENERATED
+                testCase.setSourceType("AI_GENERATED");
+
                 validateTestCase(testCase);
 
                 result.add(testCase);
@@ -323,6 +332,11 @@ public class TestCaseGenerateServiceImpl implements TestCaseGenerateService {
         vo.setAutomationSuggestion(testCase.getAutomationSuggestion());
         vo.setQualityScore(testCase.getQualityScore());
         vo.setCreateTime(testCase.getCreateTime());
+        vo.setDuplicateStatus(testCase.getDuplicateStatus());
+        vo.setDuplicateOfCaseId(testCase.getDuplicateOfCaseId());
+        vo.setDuplicateScore(testCase.getDuplicateScore());
+        vo.setDuplicateReason(testCase.getDuplicateReason());
+        vo.setSourceType(testCase.getSourceType());
 
         return vo;
     }

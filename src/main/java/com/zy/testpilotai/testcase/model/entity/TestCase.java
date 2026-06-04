@@ -104,4 +104,34 @@ public class TestCase {
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;
+
+    /**
+     * 重复状态
+     * NORMAL：正常用例
+     * DUPLICATE：重复用例
+     */
+    private String duplicateStatus;
+
+    /**
+     * 如果当前用例是重复用例，则记录被重复的用例 ID
+     */
+    private Long duplicateOfCaseId;
+
+    /**
+     * 重复相似度分数
+     */
+    private Double duplicateScore;
+
+    /**
+     * 重复原因
+     */
+    private String duplicateReason;
+
+    /**
+     * 用例来源类型
+     * AI_GENERATED：AI 首次生成
+     * AI_COMPLETED：AI 补全生成
+     * MANUAL：人工新增
+     */
+    private String sourceType;
 }
