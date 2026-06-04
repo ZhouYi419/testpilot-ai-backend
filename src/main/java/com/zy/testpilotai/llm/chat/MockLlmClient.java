@@ -21,9 +21,14 @@ public class MockLlmClient implements LlmClient {
 
     @Override
     public String chat(String systemPrompt, String userPrompt) {
-        /*
-         * 根据 Prompt 内容判断当前任务类型。
-         */
+        if (userPrompt != null && userPrompt.contains("【影响分析输出 JSON 格式】")) {
+            return mockImpactAnalysisResult();
+        }
+
+        if (userPrompt != null && userPrompt.contains("【增量测试用例输出 JSON 格式】")) {
+            return mockIncrementalTestCaseResult();
+        }
+
         if (userPrompt != null && userPrompt.contains("【质量评审输出 JSON 格式】")) {
             return mockReviewResult();
         }
@@ -230,5 +235,204 @@ public class MockLlmClient implements LlmClient {
                   ]
                 }
                 """;
+    }
+
+    private String mockImpactAnalysisResult() {
+        return """
+            {
+              "changeSummary": [
+                "会员充值模块新增连续包月能力",
+                "新增首月优惠规则",
+                "新增到期后自动续费逻辑"
+              ],
+              "affectedModules": [
+                {
+                  "moduleCode": "member_recharge",
+                  "moduleName": "会员充值",
+                  "impactLevel": "HIGH",
+                  "reason": "新需求直接修改会员购买方式和续费规则"
+                },
+                {
+                  "moduleCode": "order_payment",
+                  "moduleName": "订单支付",
+                  "impactLevel": "MEDIUM",
+                  "reason": "连续包月涉及周期性扣费和支付状态处理"
+                },
+                {
+                  "moduleCode": "member_rights",
+                  "moduleName": "会员权益",
+                  "impactLevel": "HIGH",
+                  "reason": "自动续费成功或失败会影响会员权益发放和失效"
+                }
+              ],
+              "relatedOldRules": [
+                {
+                  "versionNo": "v1.0",
+                  "moduleCode": "member_recharge",
+                  "rule": "用户可以购买月会员或年会员"
+                },
+                {
+                  "versionNo": "v1.0",
+                  "moduleCode": "member_recharge",
+                  "rule": "支付成功后系统应立即发放会员权益"
+                },
+                {
+                  "versionNo": "v1.0",
+                  "moduleCode": "member_recharge",
+                  "rule": "支付失败时不应发放会员权益"
+                }
+              ],
+              "riskPoints": [
+                {
+                  "riskLevel": "HIGH",
+                  "description": "自动续费扣费成功但会员权益未延长",
+                  "suggestion": "需要校验支付成功回调和权益发放的一致性"
+                },
+                {
+                  "riskLevel": "HIGH",
+                  "description": "用户取消连续包月后仍被扣费",
+                  "suggestion": "需要覆盖取消续费后的周期扣费验证"
+                },
+                {
+                  "riskLevel": "MEDIUM",
+                  "description": "首月优惠重复享受",
+                  "suggestion": "需要覆盖同一用户重复开通、取消后再开通等场景"
+                }
+              ],
+              "regressionScope": [
+                {
+                  "moduleCode": "member_recharge",
+                  "moduleName": "会员充值",
+                  "reason": "需要回归原有月会员、年会员购买流程"
+                },
+                {
+                  "moduleCode": "member_rights",
+                  "moduleName": "会员权益",
+                  "reason": "需要回归权益发放、权益延长、权益失效逻辑"
+                },
+                {
+                  "moduleCode": "order_payment",
+                  "moduleName": "订单支付",
+                  "reason": "需要回归支付成功、支付失败、支付超时场景"
+                }
+              ],
+              "suggestedNewTestPoints": [
+                {
+                  "type": "功能测试",
+                  "priority": "P0",
+                  "description": "用户首次开通连续包月成功后享受首月优惠并获得会员权益"
+                },
+                {
+                  "type": "异常测试",
+                  "priority": "P0",
+                  "description": "自动续费扣费失败后不应延长会员权益"
+                },
+                {
+                  "type": "边界测试",
+                  "priority": "P1",
+                  "description": "用户取消连续包月后，到期不再自动扣费"
+                },
+                {
+                  "type": "数据一致性",
+                  "priority": "P0",
+                  "description": "支付订单状态、订阅状态、会员权益有效期必须一致"
+                }
+              ],
+              "summary": "该新需求会影响会员充值、订单支付和会员权益模块，重点测试连续包月开通、取消、自动续费、首月优惠和权益发放一致性。"
+            }
+            """;
+    }
+
+    private String mockIncrementalTestCaseResult() {
+        return """
+            {
+              "testCases": [
+                {
+                  "moduleName": "会员充值",
+                  "caseTitle": "用户首次开通连续包月成功后享受首月优惠并获得会员权益",
+                  "caseType": "增量功能测试",
+                  "priority": "P0",
+                  "precondition": "用户已登录，用户从未开通过连续包月，连续包月商品配置正常",
+                  "steps": [
+                    "进入会员中心",
+                    "选择连续包月商品",
+                    "确认首月优惠价格",
+                    "完成支付",
+                    "返回会员中心查看会员状态和订阅状态"
+                  ],
+                  "expectedResult": "支付成功后订单状态为成功，用户享受首月优惠，会员权益立即生效，订阅状态为连续包月中",
+                  "testData": {
+                    "userType": "首次开通用户",
+                    "productType": "连续包月",
+                    "discountType": "首月优惠",
+                    "payStatus": "SUCCESS"
+                  },
+                  "sourceReferences": [
+                    {
+                      "versionNo": "v1.1",
+                      "sectionTitle": "新需求：连续包月",
+                      "sourceType": "NEW_REQUIREMENT"
+                    }
+                  ],
+                  "riskPoint": "支付成功但订阅状态或会员权益未正确更新",
+                  "automationSuggestion": "可通过订单查询、订阅状态查询、会员权益查询三个接口做联合断言"
+                },
+                {
+                  "moduleName": "会员权益",
+                  "caseTitle": "连续包月自动续费扣费成功后会员权益有效期应自动延长",
+                  "caseType": "增量功能测试",
+                  "priority": "P0",
+                  "precondition": "用户已开通连续包月，当前会员即将到期，自动续费扣费成功",
+                  "steps": [
+                    "构造会员即将到期状态",
+                    "触发自动续费扣费成功回调",
+                    "查询订单状态",
+                    "查询会员权益有效期"
+                  ],
+                  "expectedResult": "系统生成续费订单，订单状态为支付成功，会员权益有效期自动延长一个周期",
+                  "testData": {
+                    "subscribeStatus": "ACTIVE",
+                    "renewPayStatus": "SUCCESS"
+                  },
+                  "sourceReferences": [
+                    {
+                      "versionNo": "v1.1",
+                      "sectionTitle": "新需求：自动续费",
+                      "sourceType": "NEW_REQUIREMENT"
+                    }
+                  ],
+                  "riskPoint": "扣费成功但权益未延长会导致用户投诉",
+                  "automationSuggestion": "可模拟续费回调后校验会员有效期变化"
+                },
+                {
+                  "moduleName": "会员充值",
+                  "caseTitle": "回归原有月会员购买成功后权益立即生效",
+                  "caseType": "回归测试",
+                  "priority": "P0",
+                  "precondition": "用户已登录，月会员商品配置正常",
+                  "steps": [
+                    "进入会员中心",
+                    "选择月会员商品",
+                    "完成支付",
+                    "查看会员权益状态"
+                  ],
+                  "expectedResult": "原有月会员购买流程不受连续包月新需求影响，支付成功后权益仍立即生效",
+                  "testData": {
+                    "productType": "月会员",
+                    "payStatus": "SUCCESS"
+                  },
+                  "sourceReferences": [
+                    {
+                      "versionNo": "v1.0",
+                      "sectionTitle": "权益发放规则",
+                      "sourceType": "OLD_VERSION_REGRESSION"
+                    }
+                  ],
+                  "riskPoint": "新增连续包月后破坏原有月会员购买流程",
+                  "automationSuggestion": "复用历史月会员购买自动化用例进行回归"
+                }
+              ]
+            }
+            """;
     }
 }

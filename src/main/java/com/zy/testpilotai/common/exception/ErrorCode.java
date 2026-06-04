@@ -14,6 +14,8 @@ public enum ErrorCode {
     AI_OUTPUT_PARSE_ERROR(50040, "AI 输出解析失败"),
     TESTCASE_REVIEW_ERROR(50050, "测试用例质量评审失败"),
     TESTCASE_COMPLETE_ERROR(50060, "缺失测试用例补全失败"),
+    REQUIREMENT_IMPACT_ERROR(50070, "新需求影响分析失败"),
+    INCREMENTAL_TESTCASE_ERROR(50080, "增量测试用例生成失败"),
     ;
 
     private final int code;
