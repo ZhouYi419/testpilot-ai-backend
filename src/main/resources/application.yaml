@@ -43,6 +43,26 @@ springdoc:
 
 ai:
   embedding:
-    provider: mock
-    model-name: mock-hash-embedding-v1
+    # 当前 Embedding 提供方
+    provider: dashscope
+
+    # 通用维度配置
     dimension: 1024
+
+    # mock 模式配置
+    mock:
+      model-name: mock-hash-embedding-v1
+
+    # DashScope 模式配置
+    dashscope:
+      # 阿里云百炼 API Key
+      api-key: ${DASHSCOPE_API_KEY:}
+
+      # DashScope OpenAI Compatible Embedding 接口
+      endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
+
+      # Embedding 模型名称
+      model-name: text-embedding-v4
+
+      # 请求超时时间，单位秒
+      timeout-seconds: 60

@@ -15,6 +15,7 @@ import com.zy.testpilotai.knowledge.model.entity.KnowledgeBuildTask;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildResultVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildTaskVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeSearchResultVO;
+import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.knowledge.service.KnowledgeBaseService;
 import com.zy.testpilotai.llm.embedding.EmbeddingClient;
 import lombok.RequiredArgsConstructor;
@@ -52,7 +53,7 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
         /*
          * 只给 CHILD Chunk 生成向量。
-         * Parent Chunk 主要用于补全上下文，暂时不参与向量召回。
+         * Parent Chunk 主要用于补全上下文
          */
         List<DocumentChunk> childChunks = documentChunkMapper.selectList(
                 new LambdaQueryWrapper<DocumentChunk>()
@@ -82,13 +83,11 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
         int successCount = 0;
         int failCount = 0;
+        StringBuilder errorMessageBuilder = new StringBuilder();
 
         try {
             for (DocumentChunk chunk : childChunks) {
                 try {
-                    /*
-                     * 调用 EmbeddingClient 生成向量。
-                     */
                     List<Float> vector = embeddingClient.embed(chunk.getContent());
 
                     if (vector.size() != embeddingClient.dimension()) {
@@ -124,12 +123,20 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
                      */
                     documentChunkMapper.updateEmbeddingStatus(chunk.getId(), "FAILED");
                     failCount++;
+
+                    errorMessageBuilder
+                            .append("ChunkId=")
+                            .append(chunk.getId())
+                            .append(" 向量化失败：")
+                            .append(e.getMessage())
+                            .append("\n");
                 }
             }
 
             task.setStatus(failCount == 0 ? "SUCCESS" : "PARTIAL_SUCCESS");
             task.setSuccessChunks(successCount);
             task.setFailChunks(failCount);
+            task.setErrorMessage(errorMessageBuilder.isEmpty() ? null : errorMessageBuilder.toString());
             task.setEndTime(LocalDateTime.now());
             knowledgeBuildTaskMapper.updateById(task);
 
@@ -163,15 +170,7 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
     @Override
     public List<KnowledgeSearchResultVO> search(KnowledgeSearchRequest request) {
-        Integer topK = request.getTopK();
-
-        if (topK == null || topK <= 0) {
-            topK = 5;
-        }
-
-        if (topK > 30) {
-            topK = 30;
-        }
+        Integer topK = normalizeTopK(request.getTopK());
 
         String versionNo = StringUtils.hasText(request.getVersionNo())
                 ? request.getVersionNo()
@@ -195,7 +194,74 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
                 topK
         );
 
-        return rows.stream().map(this::toSearchResultVO).toList();
+        return rows.stream().map(this::toSearchResultVOWithParent).toList();
+    }
+
+    @Override
+    public RagContextVO buildRagContext(KnowledgeSearchRequest request) {
+        List<KnowledgeSearchResultVO> references = search(request);
+
+        StringBuilder contextBuilder = new StringBuilder();
+
+        contextBuilder.append("以下是从项目知识库中召回的需求资料，请只基于这些资料进行测试设计，不要编造未出现的业务规则。\n\n");
+
+        for (int i = 0; i < references.size(); i++) {
+            KnowledgeSearchResultVO item = references.get(i);
+
+            contextBuilder.append("【资料 ")
+                    .append(i + 1)
+                    .append("】\n");
+
+            contextBuilder.append("版本：")
+                    .append(nullToEmpty(item.getVersionNo()))
+                    .append("\n");
+
+            contextBuilder.append("模块：")
+                    .append(nullToEmpty(item.getModuleName()))
+                    .append("(")
+                    .append(nullToEmpty(item.getModuleCode()))
+                    .append(")\n");
+
+            contextBuilder.append("章节：")
+                    .append(nullToEmpty(item.getSectionTitle()))
+                    .append("\n");
+
+            contextBuilder.append("相似度分数：")
+                    .append(item.getScore())
+                    .append("\n");
+
+            if (StringUtils.hasText(item.getParentContent())) {
+                contextBuilder.append("完整上下文：\n")
+                        .append(item.getParentContent())
+                        .append("\n\n");
+            } else {
+                contextBuilder.append("命中内容：\n")
+                        .append(item.getContent())
+                        .append("\n\n");
+            }
+        }
+
+        RagContextVO vo = new RagContextVO();
+        vo.setQuery(request.getQuery());
+        vo.setProjectId(request.getProjectId());
+        vo.setVersionNo(request.getVersionNo());
+        vo.setModuleCode(request.getModuleCode());
+        vo.setContextText(contextBuilder.toString());
+        vo.setReferences(references);
+
+        return vo;
+    }
+
+    private Integer normalizeTopK(Integer topK) {
+        if (topK == null || topK <= 0) {
+            return 5;
+        }
+
+        if (topK > 30) {
+            return 30;
+        }
+
+        return topK;
     }
 
     private KnowledgeBuildResultVO toBuildResultVO(KnowledgeBuildTask task) {
@@ -231,7 +297,7 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         return vo;
     }
 
-    private KnowledgeSearchResultVO toSearchResultVO(KnowledgeSearchRow row) {
+    private KnowledgeSearchResultVO toSearchResultVOWithParent(KnowledgeSearchRow row) {
         KnowledgeSearchResultVO vo = new KnowledgeSearchResultVO();
 
         vo.setChunkId(row.getId());
@@ -246,7 +312,24 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         vo.setMetadata(row.getMetadata());
         vo.setEmbeddingModel(row.getEmbeddingModel());
         vo.setEmbeddedTime(row.getEmbeddedTime());
+        vo.setParentChunkId(row.getParentChunkId());
+
+        /*
+         * 根据 parentChunkId 查询 Parent Chunk。
+         */
+        if (row.getParentChunkId() != null) {
+            DocumentChunk parent = documentChunkMapper.selectById(row.getParentChunkId());
+
+            if (parent != null) {
+                vo.setParentSectionTitle(parent.getSectionTitle());
+                vo.setParentContent(parent.getContent());
+            }
+        }
 
         return vo;
+    }
+
+    private String nullToEmpty(String value) {
+        return value == null ? "" : value;
     }
 }

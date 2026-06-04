@@ -1,13 +1,14 @@
 package com.zy.testpilotai.knowledge.model.vo;
 
 import lombok.Data;
+
 import java.time.LocalDateTime;
 
 @Data
 public class KnowledgeSearchResultVO {
 
     /**
-     * Chunk ID
+     * 召回的 Child Chunk ID
      */
     private Long chunkId;
 
@@ -37,22 +38,23 @@ public class KnowledgeSearchResultVO {
     private String moduleName;
 
     /**
-     * 章节标题
+     * Child Chunk 所属章节标题
      */
     private String sectionTitle;
 
     /**
-     * Chunk 内容
+     * Child Chunk 内容
      */
     private String content;
 
     /**
      * 相似度分数
+     * 越接近 1 越相似。
      */
     private Double score;
 
     /**
-     * 元数据
+     * 元数据 JSON
      */
     private String metadata;
 
@@ -65,4 +67,20 @@ public class KnowledgeSearchResultVO {
      * 向量生成时间
      */
     private LocalDateTime embeddedTime;
+
+    /**
+     * Parent Chunk ID。
+     * 用于追溯完整上下文。
+     */
+    private Long parentChunkId;
+
+    /**
+     * Parent Chunk 章节标题。
+     */
+    private String parentSectionTitle;
+
+    /**
+     * Parent Chunk 内容。
+     */
+    private String parentContent;
 }

@@ -6,6 +6,7 @@ import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildResultVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildTaskVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeSearchResultVO;
+import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.knowledge.service.KnowledgeBaseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -73,5 +74,15 @@ public class KnowledgeController {
             @RequestBody @Valid KnowledgeSearchRequest request
     ) {
         return ResultUtils.success(knowledgeBaseService.search(request));
+    }
+
+    /**
+     * 构建 RAG 上下文。
+     */
+    @PostMapping("/rag-context")
+    public BaseResponse<RagContextVO> buildRagContext(
+            @RequestBody @Valid KnowledgeSearchRequest request
+    ) {
+        return ResultUtils.success(knowledgeBaseService.buildRagContext(request));
     }
 }

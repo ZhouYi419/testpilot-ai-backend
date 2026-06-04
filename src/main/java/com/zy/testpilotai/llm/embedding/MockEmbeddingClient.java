@@ -16,11 +16,11 @@ public class MockEmbeddingClient implements EmbeddingClient {
     /**
      * Mock 模型名称。
      */
-    @Value("${ai.embedding.model-name:mock-hash-embedding-v1}")
+    @Value("${ai.embedding.mock.model-name:mock-hash-embedding-v1}")
     private String modelName;
 
     /**
-     * Mock 向量维度。
+     * 向量维度。
      */
     @Value("${ai.embedding.dimension:1024}")
     private int dimension;
@@ -52,7 +52,7 @@ public class MockEmbeddingClient implements EmbeddingClient {
                     break;
                 }
 
-                // 把 byte 映射到 -1 到 1 之间
+                // 把 byte 映射到 -1 ~ 1
                 float value = ((b & 0xff) / 255.0f) * 2.0f - 1.0f;
                 vector.add(value);
             }
@@ -60,7 +60,7 @@ public class MockEmbeddingClient implements EmbeddingClient {
             counter++;
         }
 
-        // 对向量做 L2 归一化，方便 cosine 相似度计算
+        // 做 L2 归一化，方便 cosine 相似度计算
         return normalize(vector);
     }
 

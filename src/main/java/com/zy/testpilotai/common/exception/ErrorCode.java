@@ -8,7 +8,9 @@ public enum ErrorCode {
     PARAMS_ERROR(40000, "请求参数错误"),
     NOT_FOUND_ERROR(40400, "数据不存在"),
     SYSTEM_ERROR(50000, "系统内部异常"),
-    FILE_UPLOAD_ERROR(50010, "文件上传失败");
+    FILE_UPLOAD_ERROR(50010, "文件上传失败"),
+    AI_EMBEDDING_ERROR(50020, "Embedding 调用失败"),
+    ;
 
     private final int code;
 

@@ -4,6 +4,7 @@ import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildResultVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildTaskVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeSearchResultVO;
+import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import java.util.List;
 
 public interface KnowledgeBaseService {
@@ -22,4 +23,9 @@ public interface KnowledgeBaseService {
      * 知识库检索。
      */
     List<KnowledgeSearchResultVO> search(KnowledgeSearchRequest request);
+
+    /**
+     * 构建 RAG 上下文。
+     */
+    RagContextVO buildRagContext(KnowledgeSearchRequest request);
 }
