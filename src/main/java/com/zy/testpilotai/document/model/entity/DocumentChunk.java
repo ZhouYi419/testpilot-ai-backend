@@ -17,76 +17,97 @@ public class DocumentChunk {
     private Long id;
 
     /**
-     * 归属的项目ID
+     * 所属项目 ID
      */
     private Long projectId;
 
     /**
-     * 关联的文档ID (对应 prd_document 表的 id)
+     * 所属文档 ID
      */
     private Long documentId;
 
     /**
-     * 文档版本号，随原文档版本走，便于做多版本切片的对比和隔离
+     * 文档版本号，例如 v1.0、v1.1
      */
     private String versionNo;
 
     /**
-     * 关联的模块编码
+     * 功能模块编码
      */
     private String moduleCode;
 
     /**
-     * 关联的模块名称
+     * 功能模块名称
      */
     private String moduleName;
 
     /**
-     * 父切片ID
+     * 父 Chunk ID
+     * Child Chunk 会指向 Parent Chunk
      */
     private Long parentChunkId;
 
     /**
-     * 切片类型
+     * Chunk 类型
+     * PARENT：父块
+     * CHILD：子块
      */
     private String chunkType;
 
     /**
-     * 所在章节的标题
+     * 所属章节标题
      */
     private String sectionTitle;
 
     /**
-     * 切片排序索引
+     * Chunk 顺序
      */
     private Integer chunkIndex;
 
     /**
      * 变更类型
+     * NEW / MODIFIED / DELETED / UNKNOWN
      */
     private String changeType;
 
     /**
-     * 切片的纯文本内容
+     * Chunk 文本内容
      */
     private String content;
 
     /**
-     * 内容对应的 Token 数量
+     * 预估 token 数
      */
     private Integer tokenCount;
 
     /**
-     * 向量库中的唯一ID
+     * 外部向量 ID
      */
     private String vectorId;
 
     /**
-     * 扩展元数据 (JSON/JSONB 格式)
-     * 存储一些不固定的额外信息
+     * Chunk 元数据
      */
     @TableField(jdbcType = JdbcType.OTHER, typeHandler = JsonbTypeHandler.class)
     private String metadata;
 
     private LocalDateTime createTime;
+
+    /**
+     * 向量生成状态
+     * PENDING：待生成
+     * DONE：已生成
+     * FAILED：生成失败
+     */
+    private String embeddingStatus;
+
+    /**
+     * 使用的 Embedding 模型名称
+     */
+    private String embeddingModel;
+
+    /**
+     * 向量生成时间
+     */
+    private LocalDateTime embeddedTime;
 }

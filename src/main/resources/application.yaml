@@ -40,3 +40,9 @@ storage:
 springdoc:
   swagger-ui:
     path: /swagger-ui.html
+
+ai:
+  embedding:
+    provider: mock
+    model-name: mock-hash-embedding-v1
+    dimension: 1024

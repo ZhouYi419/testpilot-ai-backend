@@ -1,11 +1,14 @@
-package com.zy.testpilotai.document.model.vo;
+package com.zy.testpilotai.knowledge.model.dto;
 
 import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-public class DocumentChunkVO {
+public class KnowledgeSearchRow {
 
+    /**
+     * Chunk ID
+     */
     private Long id;
 
     /**
@@ -39,7 +42,7 @@ public class DocumentChunkVO {
     private Long parentChunkId;
 
     /**
-     * Chunk 类型：PARENT / CHILD
+     * Chunk 类型
      */
     private String chunkType;
 
@@ -84,12 +87,12 @@ public class DocumentChunkVO {
     private LocalDateTime createTime;
 
     /**
-     * 向量生成状态
+     * 向量化状态
      */
     private String embeddingStatus;
 
     /**
-     * 使用的 Embedding 模型
+     * Embedding 模型
      */
     private String embeddingModel;
 
@@ -97,4 +100,10 @@ public class DocumentChunkVO {
      * 向量生成时间
      */
     private LocalDateTime embeddedTime;
+
+    /**
+     * 相似度分数
+     * score 越接近 1，表示越相似
+     */
+    private Double score;
 }

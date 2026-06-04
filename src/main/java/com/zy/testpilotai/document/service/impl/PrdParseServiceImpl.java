@@ -236,22 +236,34 @@ public class PrdParseServiceImpl implements PrdParseService {
 
     private DocumentChunkVO toVO(DocumentChunk chunk) {
         DocumentChunkVO vo = new DocumentChunkVO();
+
+        // 基础信息
         vo.setId(chunk.getId());
         vo.setProjectId(chunk.getProjectId());
         vo.setDocumentId(chunk.getDocumentId());
         vo.setVersionNo(chunk.getVersionNo());
         vo.setModuleCode(chunk.getModuleCode());
         vo.setModuleName(chunk.getModuleName());
+
+        // Chunk 结构信息
         vo.setParentChunkId(chunk.getParentChunkId());
         vo.setChunkType(chunk.getChunkType());
         vo.setSectionTitle(chunk.getSectionTitle());
         vo.setChunkIndex(chunk.getChunkIndex());
+
+        // Chunk 内容信息
         vo.setChangeType(chunk.getChangeType());
         vo.setContent(chunk.getContent());
         vo.setTokenCount(chunk.getTokenCount());
         vo.setVectorId(chunk.getVectorId());
         vo.setMetadata(chunk.getMetadata());
         vo.setCreateTime(chunk.getCreateTime());
+
+        // 向量化状态信息
+        vo.setEmbeddingStatus(chunk.getEmbeddingStatus());
+        vo.setEmbeddingModel(chunk.getEmbeddingModel());
+        vo.setEmbeddedTime(chunk.getEmbeddedTime());
+
         return vo;
     }
 }
