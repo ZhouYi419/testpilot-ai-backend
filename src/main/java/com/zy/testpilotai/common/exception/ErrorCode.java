@@ -17,6 +17,7 @@ public enum ErrorCode {
     REQUIREMENT_IMPACT_ERROR(50070, "新需求影响分析失败"),
     INCREMENTAL_TESTCASE_ERROR(50080, "增量测试用例生成失败"),
     AI_APP_TEST_ERROR(50090, "AI 应用测试用例生成失败"),
+    AGENT_EXECUTION_ERROR(50100, "Agent 执行失败"),
     ;
 
     private final int code;

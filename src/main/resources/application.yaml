@@ -78,3 +78,11 @@ ai:
         model-name: qwen-plus
         timeout-seconds: 120
         temperature: 0.2
+
+agent:
+  execution:
+    # Agent 总任务超时时间，单位秒
+    task-timeout-seconds: 1800
+
+    # 单个步骤超时时间，单位秒
+    step-timeout-seconds: 600
