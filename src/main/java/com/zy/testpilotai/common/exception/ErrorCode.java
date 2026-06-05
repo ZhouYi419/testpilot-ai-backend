@@ -16,6 +16,7 @@ public enum ErrorCode {
     TESTCASE_COMPLETE_ERROR(50060, "缺失测试用例补全失败"),
     REQUIREMENT_IMPACT_ERROR(50070, "新需求影响分析失败"),
     INCREMENTAL_TESTCASE_ERROR(50080, "增量测试用例生成失败"),
+    AI_APP_TEST_ERROR(50090, "AI 应用测试用例生成失败"),
     ;
 
     private final int code;
