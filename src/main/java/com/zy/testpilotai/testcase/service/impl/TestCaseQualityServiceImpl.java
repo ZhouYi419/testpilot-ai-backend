@@ -1,15 +1,18 @@
 package com.zy.testpilotai.testcase.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zy.testpilotai.common.exception.BusinessException;
 import com.zy.testpilotai.common.exception.ErrorCode;
-import com.zy.testpilotai.common.utils.JsonExtractUtils;
 import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
 import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.knowledge.service.KnowledgeBaseService;
 import com.zy.testpilotai.llm.chat.LlmClient;
+import com.zy.testpilotai.llm.structured.AiTestCaseOutputParser;
+import com.zy.testpilotai.llm.structured.AiTestCaseReviewOutputParser;
+import com.zy.testpilotai.llm.structured.dto.AiGeneratedTestCaseItemDTO;
+import com.zy.testpilotai.llm.structured.dto.AiGeneratedTestCaseOutputDTO;
+import com.zy.testpilotai.llm.structured.dto.AiTestCaseReviewOutputDTO;
 import com.zy.testpilotai.testcase.mapper.TestCaseGenerateTaskMapper;
 import com.zy.testpilotai.testcase.mapper.TestCaseMapper;
 import com.zy.testpilotai.testcase.mapper.TestCaseQualityReviewTaskMapper;
@@ -27,9 +30,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 
 @Service
@@ -49,6 +55,10 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
     private final TestCaseReviewPromptBuilder promptBuilder;
 
     private final ObjectMapper objectMapper;
+
+    private final AiTestCaseOutputParser aiTestCaseOutputParser;
+
+    private final AiTestCaseReviewOutputParser aiTestCaseReviewOutputParser;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -82,19 +92,24 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
                     "TESTCASE_REVIEW",
                     reviewTaskId
             );
-            // 5. 解析模型返回的 JSON
-            String json = JsonExtractUtils.extractJsonObject(rawOutput);
-            JsonNode root = objectMapper.readTree(json);
 
-            Double totalScore = root.path("totalScore").asDouble(0.0);
-            String missingPoints = toJsonString(root.path("missingPoints"));
+            AiTestCaseReviewOutputDTO reviewOutput =
+                    aiTestCaseReviewOutputParser.parse(rawOutput);
+
+            Double totalScore = reviewOutput.getTotalScore() == null
+                    ? 0.0
+                    : reviewOutput.getTotalScore().doubleValue();
+
+            String missingPoints = reviewOutput.getMissingPoints();
 
             String suggestedCaseDirections = missingPoints;
+
+            String reviewResultJson = buildReviewResultJson(reviewOutput);
 
             // 6. 更新评审任务
             reviewTask.setStatus("SUCCESS");
             reviewTask.setTotalScore(totalScore);
-            reviewTask.setReviewResult(json);
+            reviewTask.setReviewResult(reviewResultJson);
             reviewTask.setMissingPoints(missingPoints);
             reviewTask.setSuggestedCaseDirections(suggestedCaseDirections);
             reviewTask.setRawModelOutput(rawOutput);
@@ -106,6 +121,7 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
             sourceTask.setUpdateTime(LocalDateTime.now());
             taskMapper.updateById(sourceTask);
 
+            // 8. 更新该任务下所有测试用例的质量评分
             for (TestCase testCase : testCases) {
                 testCase.setQualityScore(totalScore);
                 testCase.setUpdateTime(LocalDateTime.now());
@@ -154,7 +170,11 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
         searchRequest.setVersionNo(sourceTask.getVersionNo());
         searchRequest.setModuleCode(sourceTask.getModuleCode());
         searchRequest.setTopK(request.getTopK());
-        searchRequest.setQuery(sourceTask.getGenerateGoal() + "\n缺失测试点：" + reviewTask.getMissingPoints());
+        searchRequest.setQuery(
+                sourceTask.getGenerateGoal()
+                        + "\n缺失测试点："
+                        + reviewTask.getMissingPoints()
+        );
 
         RagContextVO ragContext = knowledgeBaseService.buildRagContext(searchRequest);
 
@@ -179,6 +199,7 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
             // 7. 解析补全用例
             List<TestCase> addedCases = parseAndBuildTestCases(
                     rawOutput,
+                    sourceTask.getTaskId(),
                     sourceTask
             );
 
@@ -242,6 +263,7 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
             TestCaseGenerateTask sourceTask
     ) {
         TestCaseQualityReviewTask reviewTask = new TestCaseQualityReviewTask();
+
         reviewTask.setReviewTaskId(reviewTaskId);
         reviewTask.setSourceTaskId(sourceTask.getTaskId());
         reviewTask.setProjectId(sourceTask.getProjectId());
@@ -252,6 +274,7 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
         reviewTask.setUpdateTime(LocalDateTime.now());
 
         reviewTaskMapper.insert(reviewTask);
+
         return reviewTask;
     }
 
@@ -293,114 +316,89 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
         reviewTaskMapper.updateById(reviewTask);
     }
 
+    /**
+     * 把结构化质量评审结果组装成标准 JSON。
+     */
+    private String buildReviewResultJson(AiTestCaseReviewOutputDTO reviewOutput) {
+        Map<String, Object> result = new LinkedHashMap<>();
+
+        result.put("totalScore", reviewOutput.getTotalScore());
+        result.put("dimensions", readJsonOrRaw(reviewOutput.getDimensions()));
+        result.put("missingPoints", readJsonOrRaw(reviewOutput.getMissingPoints()));
+        result.put("duplicateCases", readJsonOrRaw(reviewOutput.getDuplicateCases()));
+        result.put("lowQualityCases", readJsonOrRaw(reviewOutput.getLowQualityCases()));
+        result.put("summary", reviewOutput.getSummary());
+
+        return toJsonString(result);
+    }
+
+    /**
+     * 尝试把 JSON 字符串转成 JsonNode。
+     */
+    private Object readJsonOrRaw(String json) {
+        if (!StringUtils.hasText(json)) {
+            return null;
+        }
+
+        try {
+            return objectMapper.readTree(json);
+        } catch (Exception e) {
+            return json;
+        }
+    }
+
     private List<TestCase> parseAndBuildTestCases(
             String rawOutput,
+            String taskId,
             TestCaseGenerateTask sourceTask
     ) {
-        try {
-            String json = JsonExtractUtils.extractJsonObject(rawOutput);
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode testCasesNode = root.path("testCases");
+        AiGeneratedTestCaseOutputDTO output = aiTestCaseOutputParser.parse(rawOutput);
 
-            if (!testCasesNode.isArray()) {
-                throw new BusinessException(
-                        ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                        "模型输出中缺少 testCases 数组"
-                );
-            }
+        List<TestCase> result = new ArrayList<>();
 
-            List<TestCase> result = new ArrayList<>();
+        for (AiGeneratedTestCaseItemDTO item : output.getTestCases()) {
+            TestCase testCase = new TestCase();
 
-            for (JsonNode node : testCasesNode) {
-                TestCase testCase = new TestCase();
+            testCase.setTaskId(taskId);
+            testCase.setProjectId(sourceTask.getProjectId());
+            testCase.setVersionNo(sourceTask.getVersionNo());
 
-                // 补全的用例仍然归属于原始 taskId
-                testCase.setTaskId(sourceTask.getTaskId());
-                testCase.setProjectId(sourceTask.getProjectId());
-                testCase.setVersionNo(sourceTask.getVersionNo());
-                testCase.setModuleCode(sourceTask.getModuleCode());
-
-                testCase.setModuleName(getText(node, "moduleName"));
-                testCase.setCaseTitle(getText(node, "caseTitle"));
-                testCase.setCaseType(getText(node, "caseType"));
-                testCase.setPriority(getText(node, "priority"));
-                testCase.setPrecondition(getText(node, "precondition"));
-                testCase.setExpectedResult(getText(node, "expectedResult"));
-                testCase.setRiskPoint(getText(node, "riskPoint"));
-                testCase.setAutomationSuggestion(getText(node, "automationSuggestion"));
-
-                testCase.setSteps(toJsonString(node.path("steps")));
-                testCase.setTestData(toJsonString(node.path("testData")));
-                testCase.setSourceReferences(toJsonString(node.path("sourceReferences")));
-
-                testCase.setQualityScore(null);
-                testCase.setCreateTime(LocalDateTime.now());
-                testCase.setUpdateTime(LocalDateTime.now());
-
-                // 补全出来的用例默认不是重复用例
-                testCase.setDuplicateStatus("NORMAL");
-                testCase.setDuplicateOfCaseId(null);
-                testCase.setDuplicateScore(null);
-                testCase.setDuplicateReason(null);
-
-                // 质量评审后补全的用例来源标记为 AI_COMPLETED
-                testCase.setSourceType("AI_COMPLETED");
-
-                validateTestCase(testCase);
-                result.add(testCase);
-            }
-
-            return result;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "解析补全测试用例 JSON 失败：" + e.getMessage()
+            testCase.setModuleCode(
+                    StringUtils.hasText(item.getModuleCode())
+                            ? item.getModuleCode()
+                            : sourceTask.getModuleCode()
             );
-        }
-    }
 
-    private void validateTestCase(TestCase testCase) {
-        if (!StringUtils.hasText(testCase.getCaseTitle())) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "测试用例标题不能为空"
-            );
+            testCase.setModuleName(item.getModuleName());
+            testCase.setCaseTitle(item.getCaseTitle());
+            testCase.setCaseType(item.getCaseType());
+            testCase.setPriority(item.getPriority());
+            testCase.setPrecondition(item.getPrecondition());
+            testCase.setSteps(item.getSteps());
+            testCase.setExpectedResult(item.getExpectedResult());
+            testCase.setTestData(item.getTestData());
+            testCase.setSourceReferences(item.getSourceReferences());
+            testCase.setRiskPoint(item.getRiskPoint());
+            testCase.setAutomationSuggestion(item.getAutomationSuggestion());
+
+            testCase.setQualityScore(null);
+
+            // 补全出来的用例默认不是重复用例
+            testCase.setDuplicateStatus("NORMAL");
+            testCase.setDuplicateOfCaseId(null);
+            testCase.setDuplicateScore(null);
+            testCase.setDuplicateReason(null);
+
+            // 来源标记为 AI 补全
+            testCase.setSourceType("AI_COMPLETED");
+
+            testCase.setCreateTime(LocalDateTime.now());
+            testCase.setUpdateTime(LocalDateTime.now());
+
+            result.add(testCase);
         }
 
-        if (!StringUtils.hasText(testCase.getExpectedResult())) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "测试用例预期结果不能为空"
-            );
-        }
-
-        if (!StringUtils.hasText(testCase.getSteps())) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "测试步骤不能为空"
-            );
-        }
-    }
-
-    private String getText(JsonNode node, String fieldName) {
-        JsonNode value = node.path(fieldName);
-        return value.isMissingNode() || value.isNull() ? null : value.asText();
-    }
-
-    private String toJsonString(JsonNode node) {
-        try {
-            if (node == null || node.isMissingNode() || node.isNull()) {
-                return "null";
-            }
-            return objectMapper.writeValueAsString(node);
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "JSON 字段转换失败：" + e.getMessage()
-            );
-        }
+        return result;
     }
 
     private String toJsonString(Object object) {

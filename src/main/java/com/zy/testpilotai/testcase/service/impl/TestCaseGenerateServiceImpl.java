@@ -5,11 +5,13 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zy.testpilotai.common.exception.BusinessException;
 import com.zy.testpilotai.common.exception.ErrorCode;
-import com.zy.testpilotai.common.utils.JsonExtractUtils;
 import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
 import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.knowledge.service.KnowledgeBaseService;
 import com.zy.testpilotai.llm.chat.LlmClient;
+import com.zy.testpilotai.llm.structured.AiTestCaseOutputParser;
+import com.zy.testpilotai.llm.structured.dto.AiGeneratedTestCaseItemDTO;
+import com.zy.testpilotai.llm.structured.dto.AiGeneratedTestCaseOutputDTO;
 import com.zy.testpilotai.project.service.ProjectService;
 import com.zy.testpilotai.testcase.mapper.TestCaseGenerateTaskMapper;
 import com.zy.testpilotai.testcase.mapper.TestCaseMapper;
@@ -48,6 +50,8 @@ public class TestCaseGenerateServiceImpl implements TestCaseGenerateService {
     private final TestCaseMapper testCaseMapper;
 
     private final ObjectMapper objectMapper;
+
+    private final AiTestCaseOutputParser aiTestCaseOutputParser;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -207,71 +211,55 @@ public class TestCaseGenerateServiceImpl implements TestCaseGenerateService {
             String taskId,
             TestCaseGenerateRequest request
     ) {
-        try {
-            String json = JsonExtractUtils.extractJsonObject(rawOutput);
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode testCasesNode = root.path("testCases");
+        AiGeneratedTestCaseOutputDTO output = aiTestCaseOutputParser.parse(rawOutput);
 
-            if (!testCasesNode.isArray()) {
-                throw new BusinessException(
-                        ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                        "模型输出中缺少 testCases 数组"
-                );
-            }
+        List<TestCase> result = new ArrayList<>();
 
-            List<TestCase> result = new ArrayList<>();
+        for (AiGeneratedTestCaseItemDTO item : output.getTestCases()) {
+            TestCase testCase = new TestCase();
 
-            for (JsonNode node : testCasesNode) {
-                TestCase testCase = new TestCase();
+            testCase.setTaskId(taskId);
+            testCase.setProjectId(request.getProjectId());
+            testCase.setVersionNo(request.getVersionNo());
 
-                // 基础归属信息
-                testCase.setTaskId(taskId);
-                testCase.setProjectId(request.getProjectId());
-                testCase.setVersionNo(request.getVersionNo());
-                testCase.setModuleCode(request.getModuleCode());
-
-                // 模型生成内容
-                testCase.setModuleName(getText(node, "moduleName"));
-                testCase.setCaseTitle(getText(node, "caseTitle"));
-                testCase.setCaseType(getText(node, "caseType"));
-                testCase.setPriority(getText(node, "priority"));
-                testCase.setPrecondition(getText(node, "precondition"));
-                testCase.setExpectedResult(getText(node, "expectedResult"));
-                testCase.setRiskPoint(getText(node, "riskPoint"));
-                testCase.setAutomationSuggestion(getText(node, "automationSuggestion"));
-
-                // JSONB 字段，需要转成 JSON 字符串
-                testCase.setSteps(toJsonString(node.path("steps")));
-                testCase.setTestData(toJsonString(node.path("testData")));
-                testCase.setSourceReferences(toJsonString(node.path("sourceReferences")));
-
-                testCase.setQualityScore(null);
-                testCase.setCreateTime(LocalDateTime.now());
-                testCase.setUpdateTime(LocalDateTime.now());
-
-                // 默认不是重复用例
-                testCase.setDuplicateStatus("NORMAL");
-                testCase.setDuplicateOfCaseId(null);
-                testCase.setDuplicateScore(null);
-                testCase.setDuplicateReason(null);
-
-                // 首次生成的用例来源标记为 AI_GENERATED
-                testCase.setSourceType("AI_GENERATED");
-
-                validateTestCase(testCase);
-
-                result.add(testCase);
-            }
-
-            return result;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "解析模型测试用例 JSON 失败：" + e.getMessage()
+            testCase.setModuleCode(
+                    StringUtils.hasText(item.getModuleCode())
+                            ? item.getModuleCode()
+                            : request.getModuleCode()
             );
+
+            testCase.setModuleName(item.getModuleName());
+            testCase.setCaseTitle(item.getCaseTitle());
+            testCase.setCaseType(item.getCaseType());
+            testCase.setPriority(item.getPriority());
+            testCase.setPrecondition(item.getPrecondition());
+
+            testCase.setSteps(item.getSteps());
+            testCase.setTestData(item.getTestData());
+            testCase.setSourceReferences(item.getSourceReferences());
+
+            testCase.setExpectedResult(item.getExpectedResult());
+            testCase.setRiskPoint(item.getRiskPoint());
+            testCase.setAutomationSuggestion(item.getAutomationSuggestion());
+
+            testCase.setQualityScore(null);
+
+            // 默认去重状态
+            testCase.setDuplicateStatus("NORMAL");
+            testCase.setDuplicateOfCaseId(null);
+            testCase.setDuplicateScore(null);
+            testCase.setDuplicateReason(null);
+
+            // 首次生成来源
+            testCase.setSourceType("AI_GENERATED");
+
+            testCase.setCreateTime(LocalDateTime.now());
+            testCase.setUpdateTime(LocalDateTime.now());
+
+            result.add(testCase);
         }
+
+        return result;
     }
 
     private void validateTestCase(TestCase testCase) {

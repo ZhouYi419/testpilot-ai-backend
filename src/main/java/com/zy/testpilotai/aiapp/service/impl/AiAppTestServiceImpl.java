@@ -21,6 +21,9 @@ import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
 import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.knowledge.service.KnowledgeBaseService;
 import com.zy.testpilotai.llm.chat.LlmClient;
+import com.zy.testpilotai.llm.structured.AiAppTestCaseOutputParser;
+import com.zy.testpilotai.llm.structured.dto.AiAppTestCaseItemDTO;
+import com.zy.testpilotai.llm.structured.dto.AiAppTestCaseOutputDTO;
 import com.zy.testpilotai.project.service.ProjectService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -48,6 +51,8 @@ public class AiAppTestServiceImpl implements AiAppTestService {
     private final AiAppTestPromptBuilder promptBuilder;
 
     private final ObjectMapper objectMapper;
+
+    private final AiAppTestCaseOutputParser aiAppTestCaseOutputParser;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -213,11 +218,6 @@ public class AiAppTestServiceImpl implements AiAppTestService {
 
             return knowledgeBaseService.buildRagContext(searchRequest);
         } catch (Exception e) {
-            /*
-             * AI 应用测试不强依赖知识库。
-             * 如果知识库没有构建，不能直接让整个生成失败。
-             * 这里降级为只基于应用说明生成。
-             */
             return null;
         }
     }
@@ -227,69 +227,42 @@ public class AiAppTestServiceImpl implements AiAppTestService {
             String taskId,
             AiAppTestGenerateRequest request
     ) {
-        try {
-            String json = JsonExtractUtils.extractJsonObject(rawOutput);
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode testCasesNode = root.path("testCases");
+        AiAppTestCaseOutputDTO output = aiAppTestCaseOutputParser.parse(rawOutput);
 
-            if (!testCasesNode.isArray()) {
-                throw new BusinessException(
-                        ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                        "模型输出中缺少 testCases 数组"
-                );
-            }
+        List<AiAppTestCase> result = new ArrayList<>();
 
-            List<AiAppTestCase> result = new ArrayList<>();
+        for (AiAppTestCaseItemDTO item : output.getTestCases()) {
+            AiAppTestCase testCase = new AiAppTestCase();
 
-            for (JsonNode node : testCasesNode) {
-                AiAppTestCase testCase = new AiAppTestCase();
+            testCase.setTaskId(taskId);
 
-                testCase.setTaskId(taskId);
-                testCase.setAppType(getText(node, "appType", request.getAppType()));
-                testCase.setTestDimension(getText(node, "testDimension", null));
-                testCase.setCaseTitle(getText(node, "caseTitle", null));
-                testCase.setPriority(getText(node, "priority", "P1"));
-                testCase.setAttackPrompt(getText(node, "attackPrompt", null));
-                testCase.setInputData(toJsonString(node.path("inputData")));
-                testCase.setPrecondition(getText(node, "precondition", null));
-                testCase.setSteps(toJsonString(node.path("steps")));
-                testCase.setExpectedBehavior(getText(node, "expectedBehavior", null));
-                testCase.setPassCriteria(getText(node, "passCriteria", null));
-                testCase.setEvaluationMethod(getText(node, "evaluationMethod", null));
-                testCase.setRiskLevel(getText(node, "riskLevel", "MEDIUM"));
-                testCase.setAutomationSuggestion(getText(node, "automationSuggestion", null));
-                testCase.setSourceReferences(toJsonString(node.path("sourceReferences")));
-                testCase.setCreateTime(LocalDateTime.now());
-                testCase.setUpdateTime(LocalDateTime.now());
-
-                validateCase(testCase);
-
-                result.add(testCase);
-            }
-
-            return result;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "解析 AI 应用测试用例 JSON 失败：" + e.getMessage()
+            testCase.setAppType(
+                    StringUtils.hasText(item.getAppType())
+                            ? item.getAppType()
+                            : request.getAppType()
             );
-        }
-    }
 
-    private void validateCase(AiAppTestCase testCase) {
-        if (!StringUtils.hasText(testCase.getCaseTitle())) {
-            throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR, "AI 应用测试用例标题不能为空");
+            testCase.setTestDimension(item.getTestDimension());
+            testCase.setCaseTitle(item.getCaseTitle());
+            testCase.setPriority(item.getPriority());
+            testCase.setAttackPrompt(item.getAttackPrompt());
+            testCase.setInputData(item.getInputData());
+            testCase.setPrecondition(item.getPrecondition());
+            testCase.setSteps(item.getSteps());
+            testCase.setExpectedBehavior(item.getExpectedBehavior());
+            testCase.setPassCriteria(item.getPassCriteria());
+            testCase.setEvaluationMethod(item.getEvaluationMethod());
+            testCase.setRiskLevel(item.getRiskLevel());
+            testCase.setAutomationSuggestion(item.getAutomationSuggestion());
+            testCase.setSourceReferences(item.getSourceReferences());
+
+            testCase.setCreateTime(LocalDateTime.now());
+            testCase.setUpdateTime(LocalDateTime.now());
+
+            result.add(testCase);
         }
 
-        if (!StringUtils.hasText(testCase.getExpectedBehavior())) {
-            throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR, "AI 应用测试用例预期行为不能为空");
-        }
-
-        if (!StringUtils.hasText(testCase.getTestDimension())) {
-            throw new BusinessException(ErrorCode.AI_OUTPUT_PARSE_ERROR, "AI 应用测试维度不能为空");
-        }
+        return result;
     }
 
     private void markTaskFailed(AiAppTestTask task, String errorMessage) {
@@ -297,28 +270,6 @@ public class AiAppTestServiceImpl implements AiAppTestService {
         task.setErrorMessage(errorMessage);
         task.setUpdateTime(LocalDateTime.now());
         aiAppTestTaskMapper.updateById(task);
-    }
-
-    private String getText(JsonNode node, String fieldName, String defaultValue) {
-        JsonNode value = node.path(fieldName);
-        if (value.isMissingNode() || value.isNull()) {
-            return defaultValue;
-        }
-        return value.asText();
-    }
-
-    private String toJsonString(JsonNode node) {
-        try {
-            if (node == null || node.isMissingNode() || node.isNull()) {
-                return "null";
-            }
-            return objectMapper.writeValueAsString(node);
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "JSON 字段转换失败：" + e.getMessage()
-            );
-        }
     }
 
     private AiAppTestCaseVO toCaseVO(AiAppTestCase testCase) {

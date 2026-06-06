@@ -1,15 +1,18 @@
 package com.zy.testpilotai.requirement.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.zy.testpilotai.common.exception.BusinessException;
 import com.zy.testpilotai.common.exception.ErrorCode;
-import com.zy.testpilotai.common.utils.JsonExtractUtils;
 import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
 import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.knowledge.service.KnowledgeBaseService;
 import com.zy.testpilotai.llm.chat.LlmClient;
+import com.zy.testpilotai.llm.structured.AiRequirementImpactOutputParser;
+import com.zy.testpilotai.llm.structured.AiTestCaseOutputParser;
+import com.zy.testpilotai.llm.structured.dto.AiGeneratedTestCaseItemDTO;
+import com.zy.testpilotai.llm.structured.dto.AiGeneratedTestCaseOutputDTO;
+import com.zy.testpilotai.llm.structured.dto.AiRequirementImpactOutputDTO;
 import com.zy.testpilotai.project.service.ProjectService;
 import com.zy.testpilotai.requirement.mapper.RequirementChangeAnalysisTaskMapper;
 import com.zy.testpilotai.requirement.model.dto.ChangeImpactAnalyzeRequest;
@@ -53,10 +56,14 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
 
     private final ObjectMapper objectMapper;
 
+    private final AiTestCaseOutputParser aiTestCaseOutputParser;
+
+    private final AiRequirementImpactOutputParser aiRequirementImpactOutputParser;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public ChangeImpactAnalyzeResultVO analyzeImpact(ChangeImpactAnalyzeRequest request) {
-        // 校验项目是否存在
+        // 1. 校验项目是否存在
         projectService.getById(request.getProjectId());
 
         String analysisTaskId = "ia_" + UUID.randomUUID().toString().replace("-", "");
@@ -64,7 +71,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
         RequirementChangeAnalysisTask task = createAnalysisTask(analysisTaskId, request);
 
         try {
-            // 1. 检索基线版本相关知识库内容
+            // 2. 检索基线版本相关知识库内容
             KnowledgeSearchRequest searchRequest = new KnowledgeSearchRequest();
             searchRequest.setProjectId(request.getProjectId());
             searchRequest.setVersionNo(request.getBaseVersionNo());
@@ -73,14 +80,14 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
 
             RagContextVO oldVersionContext = knowledgeBaseService.buildRagContext(searchRequest);
 
-            // 2. 查询基线版本历史测试用例
+            // 3. 查询基线版本历史测试用例
             List<TestCase> historicalCases = listHistoricalCases(
                     request.getProjectId(),
                     request.getBaseVersionNo(),
                     null
             );
 
-            // 3. 构建影响分析 Prompt
+            // 4. 构建影响分析 Prompt
             String systemPrompt = promptBuilder.buildImpactSystemPrompt();
             String userPrompt = promptBuilder.buildImpactUserPrompt(
                     request,
@@ -88,7 +95,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
                     historicalCases
             );
 
-            // 4. 调用 LLM 做影响分析
+            // 5. 调用 LLM 做新需求影响分析
             String rawOutput = llmClient.chat(
                     systemPrompt,
                     userPrompt,
@@ -96,20 +103,21 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
                     analysisTaskId
             );
 
-            // 5. 解析模型输出
-            String json = JsonExtractUtils.extractJsonObject(rawOutput);
-            JsonNode root = objectMapper.readTree(json);
+            /*
+             * 6. 使用结构化解析器解析影响分析结果。
+             */
+            AiRequirementImpactOutputDTO impactOutput =
+                    aiRequirementImpactOutputParser.parse(rawOutput);
 
-            // 6. 更新影响分析任务
-            task.setStatus("SUCCESS");
-            task.setChangeSummary(toJsonString(root.path("changeSummary")));
-            task.setAffectedModules(toJsonString(root.path("affectedModules")));
-            task.setRelatedOldRules(toJsonString(root.path("relatedOldRules")));
-            task.setRelatedHistoricalCases(toJsonStringFromCases(historicalCases));
-            task.setRiskPoints(toJsonString(root.path("riskPoints")));
-            task.setRegressionScope(toJsonString(root.path("regressionScope")));
-            task.setSuggestedNewTestPoints(toJsonString(root.path("suggestedNewTestPoints")));
+            // 7. 更新影响分析任务
+            task.setChangeSummary(impactOutput.getChangeSummary());
+            task.setAffectedModules(impactOutput.getAffectedModules());
+            task.setRelatedOldRules(impactOutput.getRelatedOldRules());
+            task.setRiskPoints(impactOutput.getRiskPoints());
+            task.setRegressionScope(impactOutput.getRegressionScope());
+            task.setSuggestedNewTestPoints(impactOutput.getSuggestedNewTestPoints());
             task.setRawModelOutput(rawOutput);
+            task.setStatus("SUCCESS");
             task.setUpdateTime(LocalDateTime.now());
 
             analysisTaskMapper.updateById(task);
@@ -196,7 +204,12 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
             generateTask.setUpdateTime(LocalDateTime.now());
             testCaseGenerateTaskMapper.updateById(generateTask);
 
-            // 6. 解析并构建 TestCase
+            /*
+             * 6. 结构化解析增量测试用例。
+             *
+             * 这里走 AiTestCaseOutputParser，
+             * 可以兼容 steps / testData / sourceReferences 输出成对象、数组或字符串。
+             */
             List<TestCase> testCases = parseIncrementalTestCases(
                     rawOutput,
                     taskId,
@@ -248,6 +261,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
             ChangeImpactAnalyzeRequest request
     ) {
         RequirementChangeAnalysisTask task = new RequirementChangeAnalysisTask();
+
         task.setAnalysisTaskId(analysisTaskId);
         task.setProjectId(request.getProjectId());
         task.setBaseVersionNo(request.getBaseVersionNo());
@@ -258,6 +272,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
         task.setUpdateTime(LocalDateTime.now());
 
         analysisTaskMapper.insert(task);
+
         return task;
     }
 
@@ -268,6 +283,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
     ) {
         try {
             TestCaseGenerateTask task = new TestCaseGenerateTask();
+
             task.setTaskId(taskId);
             task.setProjectId(analysisTask.getProjectId());
 
@@ -275,7 +291,6 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
             task.setVersionNo(analysisTask.getTargetVersionNo());
 
             task.setModuleCode(null);
-
             task.setGenerateGoal("基于新需求生成增量测试用例：" + analysisTask.getNewRequirement());
             task.setGenerateType("INCREMENTAL");
             task.setSelectedSkills(objectMapper.writeValueAsString(request.getSelectedSkills()));
@@ -284,6 +299,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
             task.setUpdateTime(LocalDateTime.now());
 
             testCaseGenerateTaskMapper.insert(task);
+
             return task;
         } catch (Exception e) {
             throw new BusinessException(
@@ -333,96 +349,50 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
             String taskId,
             RequirementChangeAnalysisTask analysisTask
     ) {
-        try {
-            String json = JsonExtractUtils.extractJsonObject(rawOutput);
-            JsonNode root = objectMapper.readTree(json);
-            JsonNode testCasesNode = root.path("testCases");
+        AiGeneratedTestCaseOutputDTO output = aiTestCaseOutputParser.parse(rawOutput);
 
-            if (!testCasesNode.isArray()) {
-                throw new BusinessException(
-                        ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                        "模型输出中缺少 testCases 数组"
-                );
-            }
+        List<TestCase> result = new ArrayList<>();
 
-            List<TestCase> result = new ArrayList<>();
+        for (AiGeneratedTestCaseItemDTO item : output.getTestCases()) {
+            TestCase testCase = new TestCase();
 
-            for (JsonNode node : testCasesNode) {
-                TestCase testCase = new TestCase();
+            // 增量用例归属目标版本
+            testCase.setTaskId(taskId);
+            testCase.setProjectId(analysisTask.getProjectId());
+            testCase.setVersionNo(analysisTask.getTargetVersionNo());
 
-                // 增量用例归属新版本
-                testCase.setTaskId(taskId);
-                testCase.setProjectId(analysisTask.getProjectId());
-                testCase.setVersionNo(analysisTask.getTargetVersionNo());
+            testCase.setModuleCode(item.getModuleCode());
+            testCase.setModuleName(item.getModuleName());
+            testCase.setCaseTitle(item.getCaseTitle());
+            testCase.setCaseType(item.getCaseType());
+            testCase.setPriority(item.getPriority());
+            testCase.setPrecondition(item.getPrecondition());
+            testCase.setSteps(item.getSteps());
+            testCase.setExpectedResult(item.getExpectedResult());
+            testCase.setTestData(item.getTestData());
+            testCase.setSourceReferences(item.getSourceReferences());
+            testCase.setRiskPoint(item.getRiskPoint());
+            testCase.setAutomationSuggestion(item.getAutomationSuggestion());
 
-                // 第一版先使用模型返回的 moduleName，moduleCode 后续可以通过模块映射补齐
-                testCase.setModuleCode(getText(node, "moduleCode"));
-                testCase.setModuleName(getText(node, "moduleName"));
+            // 增量生成用例默认未评分
+            testCase.setQualityScore(null);
 
-                testCase.setCaseTitle(getText(node, "caseTitle"));
-                testCase.setCaseType(getText(node, "caseType"));
-                testCase.setPriority(getText(node, "priority"));
-                testCase.setPrecondition(getText(node, "precondition"));
-                testCase.setExpectedResult(getText(node, "expectedResult"));
-                testCase.setRiskPoint(getText(node, "riskPoint"));
-                testCase.setAutomationSuggestion(getText(node, "automationSuggestion"));
+            // 默认不重复
+            testCase.setDuplicateStatus("NORMAL");
+            testCase.setDuplicateOfCaseId(null);
+            testCase.setDuplicateScore(null);
+            testCase.setDuplicateReason(null);
 
-                testCase.setSteps(toJsonString(node.path("steps")));
-                testCase.setTestData(toJsonString(node.path("testData")));
-                testCase.setSourceReferences(toJsonString(node.path("sourceReferences")));
+            // 增量需求生成来源
+            testCase.setSourceType("AI_INCREMENTAL");
 
-                // 增量生成用例默认未评分
-                testCase.setQualityScore(null);
+            testCase.setCreateTime(LocalDateTime.now());
+            testCase.setUpdateTime(LocalDateTime.now());
 
-                // 默认不重复，后续可调用 Step 7 的 deduplicate 接口去重
-                testCase.setDuplicateStatus("NORMAL");
-                testCase.setDuplicateOfCaseId(null);
-                testCase.setDuplicateScore(null);
-                testCase.setDuplicateReason(null);
-
-                // 增量需求生成来源
-                testCase.setSourceType("AI_INCREMENTAL");
-
-                testCase.setCreateTime(LocalDateTime.now());
-                testCase.setUpdateTime(LocalDateTime.now());
-
-                validateTestCase(testCase);
-
-                result.add(testCase);
-            }
-
-            return result;
-        } catch (BusinessException e) {
-            throw e;
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "解析增量测试用例 JSON 失败：" + e.getMessage()
-            );
-        }
-    }
-
-    private void validateTestCase(TestCase testCase) {
-        if (!StringUtils.hasText(testCase.getCaseTitle())) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "测试用例标题不能为空"
-            );
+            result.add(testCase);
         }
 
-        if (!StringUtils.hasText(testCase.getExpectedResult())) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "测试用例预期结果不能为空"
-            );
-        }
-
-        if (!StringUtils.hasText(testCase.getSteps())) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "测试步骤不能为空"
-            );
-        }
+        return result;
     }
 
     private void markAnalysisFailed(
@@ -432,6 +402,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
         task.setStatus("FAILED");
         task.setErrorMessage(errorMessage);
         task.setUpdateTime(LocalDateTime.now());
+
         analysisTaskMapper.updateById(task);
     }
 
@@ -442,49 +413,8 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
         task.setStatus("FAILED");
         task.setErrorMessage(errorMessage);
         task.setUpdateTime(LocalDateTime.now());
+
         testCaseGenerateTaskMapper.updateById(task);
-    }
-
-    private String getText(JsonNode node, String fieldName) {
-        JsonNode value = node.path(fieldName);
-        return value.isMissingNode() || value.isNull() ? null : value.asText();
-    }
-
-    private String toJsonString(JsonNode node) {
-        try {
-            if (node == null || node.isMissingNode() || node.isNull()) {
-                return "null";
-            }
-            return objectMapper.writeValueAsString(node);
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "JSON 字段转换失败：" + e.getMessage()
-            );
-        }
-    }
-
-    private String toJsonStringFromCases(List<TestCase> cases) {
-        try {
-            return objectMapper.writeValueAsString(
-                    cases.stream().map(testCase -> {
-                        java.util.Map<String, Object> map = new java.util.LinkedHashMap<>();
-                        map.put("id", testCase.getId());
-                        map.put("caseTitle", testCase.getCaseTitle());
-                        map.put("caseType", testCase.getCaseType());
-                        map.put("priority", testCase.getPriority());
-                        map.put("moduleCode", testCase.getModuleCode());
-                        map.put("moduleName", testCase.getModuleName());
-                        map.put("expectedResult", testCase.getExpectedResult());
-                        return map;
-                    }).toList()
-            );
-        } catch (Exception e) {
-            throw new BusinessException(
-                    ErrorCode.AI_OUTPUT_PARSE_ERROR,
-                    "历史用例 JSON 转换失败：" + e.getMessage()
-            );
-        }
     }
 
     private ChangeImpactAnalyzeResultVO toImpactVO(
@@ -498,6 +428,7 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
         vo.setTargetVersionNo(task.getTargetVersionNo());
         vo.setNewRequirement(task.getNewRequirement());
         vo.setStatus(task.getStatus());
+
         vo.setChangeSummary(task.getChangeSummary());
         vo.setAffectedModules(task.getAffectedModules());
         vo.setRelatedOldRules(task.getRelatedOldRules());
