@@ -86,7 +86,6 @@ public class AgentAsyncProcessor {
         try {
             markAgentRunning(agentTask);
 
-            // Agent 开始前检查一次总任务超时
             checkTaskTimeout(agentTaskId);
 
             switch (agentTask.getWorkflowType()) {
@@ -99,7 +98,7 @@ public class AgentAsyncProcessor {
                 );
             }
 
-            checkCancel(agentTask.getAgentTaskId());
+            checkCancel(agentTaskId);
             checkTaskTimeout(agentTaskId);
 
             agentTask = getAgentTask(agentTaskId);
@@ -150,6 +149,15 @@ public class AgentAsyncProcessor {
         }
     }
 
+    /**
+     * 普通测试设计 Agent。
+     *
+     * 流程：
+     * 1. 生成测试用例
+     * 2. 质量评审，可通过 autoReview 控制
+     * 3. 补全缺失用例，可通过 autoCompleteMissing 控制
+     * 4. 测试用例去重，可通过 autoDeduplicate 控制
+     */
     private void runStandardTestDesign(AgentTask agentTask) {
         int resumeFromStep = normalizeResumeStep(agentTask.getResumeFromStep());
 
@@ -160,7 +168,7 @@ public class AgentAsyncProcessor {
         final String userGoal = agentTask.getUserGoal();
         final String selectedSkillsJson = agentTask.getSelectedSkills();
 
-        TestCaseGenerateResultVO generateResult = null;
+        TestCaseGenerateResultVO generateResult;
 
         if (resumeFromStep <= 1) {
             generateResult = executeStep(
@@ -172,6 +180,8 @@ public class AgentAsyncProcessor {
                     () -> {
                         checkCancel(agentTaskId);
 
+                        AgentTask latestTask = getAgentTask(agentTaskId);
+
                         TestCaseGenerateRequest request = new TestCaseGenerateRequest();
                         request.setProjectId(projectId);
                         request.setVersionNo(targetVersionNo);
@@ -179,7 +189,7 @@ public class AgentAsyncProcessor {
                         request.setGenerateGoal(userGoal);
                         request.setGenerateType("AGENT_STANDARD");
                         request.setSelectedSkills(parseSkills(selectedSkillsJson));
-                        request.setTopK(8);
+                        request.setTopK(safeTopK(latestTask));
 
                         return testCaseGenerateService.generate(request);
                     }
@@ -187,18 +197,24 @@ public class AgentAsyncProcessor {
 
             AgentTask latestTask = getAgentTask(agentTaskId);
             latestTask.setTestcaseTaskId(generateResult.getTaskId());
+            latestTask.setUpdateTime(LocalDateTime.now());
             agentTaskMapper.updateById(latestTask);
         }
 
         String testcaseTaskId = getAgentTask(agentTaskId).getTestcaseTaskId();
 
         if (!StringUtils.hasText(testcaseTaskId)) {
-            throw new BusinessException(ErrorCode.AGENT_EXECUTION_ERROR, "缺少测试用例生成任务ID，无法继续执行");
+            throw new BusinessException(
+                    ErrorCode.AGENT_EXECUTION_ERROR,
+                    "缺少测试用例生成任务ID，无法继续执行"
+            );
         }
 
         TestCaseQualityReviewResultVO reviewResult = null;
 
-        if (resumeFromStep <= 2) {
+        AgentTask latestForReview = getAgentTask(agentTaskId);
+
+        if (resumeFromStep <= 2 && enabled(latestForReview.getAutoReview())) {
             reviewResult = executeStep(
                     agentTaskId,
                     2,
@@ -210,12 +226,23 @@ public class AgentAsyncProcessor {
 
                         TestCaseReviewRequest request = new TestCaseReviewRequest();
                         request.setTaskId(testcaseTaskId);
+
                         return testCaseQualityService.review(request);
                     }
             );
+        } else if (resumeFromStep <= 2) {
+            createSkippedStep(
+                    agentTaskId,
+                    2,
+                    "REVIEW",
+                    "质量评审",
+                    "autoReview=false，跳过质量评审"
+            );
         }
 
-        if (resumeFromStep <= 3) {
+        AgentTask latestForComplete = getAgentTask(agentTaskId);
+
+        if (resumeFromStep <= 3 && enabled(latestForComplete.getAutoCompleteMissing())) {
             String reviewTaskId = reviewResult == null ? null : reviewResult.getReviewTaskId();
 
             if (StringUtils.hasText(reviewTaskId)) {
@@ -228,21 +255,40 @@ public class AgentAsyncProcessor {
                         () -> {
                             checkCancel(agentTaskId);
 
+                            AgentTask latestTask = getAgentTask(agentTaskId);
+
                             MissingCaseCompleteRequest request = new MissingCaseCompleteRequest();
                             request.setTaskId(testcaseTaskId);
                             request.setReviewTaskId(reviewTaskId);
-                            request.setTopK(8);
+                            request.setTopK(safeTopK(latestTask));
+
                             return testCaseQualityService.completeMissing(request);
                         }
                 );
             } else {
-                createSkippedStep(agentTaskId, 3, "COMPLETE", "补全缺失用例", "没有本次评审结果，跳过补全");
+                createSkippedStep(
+                        agentTaskId,
+                        3,
+                        "COMPLETE",
+                        "补全缺失用例",
+                        "没有本次评审结果，跳过补全"
+                );
             }
+        } else if (resumeFromStep <= 3) {
+            createSkippedStep(
+                    agentTaskId,
+                    3,
+                    "COMPLETE",
+                    "补全缺失用例",
+                    "autoCompleteMissing=false，跳过补全"
+            );
         }
 
         TestCaseDeduplicateResultVO deduplicateResult = null;
 
-        if (resumeFromStep <= 4) {
+        AgentTask latestForDeduplicate = getAgentTask(agentTaskId);
+
+        if (resumeFromStep <= 4 && enabled(latestForDeduplicate.getAutoDeduplicate())) {
             deduplicateResult = executeStep(
                     agentTaskId,
                     4,
@@ -252,11 +298,22 @@ public class AgentAsyncProcessor {
                     () -> {
                         checkCancel(agentTaskId);
 
+                        AgentTask latestTask = getAgentTask(agentTaskId);
+
                         TestCaseDeduplicateRequest request = new TestCaseDeduplicateRequest();
                         request.setTaskId(testcaseTaskId);
-                        request.setThreshold(0.85);
+                        request.setThreshold(safeDeduplicateThreshold(latestTask));
+
                         return testCaseToolService.deduplicate(request);
                     }
+            );
+        } else if (resumeFromStep <= 4) {
+            createSkippedStep(
+                    agentTaskId,
+                    4,
+                    "DEDUPLICATE",
+                    "测试用例去重",
+                    "autoDeduplicate=false，跳过去重"
             );
         }
 
@@ -265,7 +322,12 @@ public class AgentAsyncProcessor {
         finalResult.put("testcaseTaskId", testcaseTaskId);
         finalResult.put("duplicateCaseCount", deduplicateResult == null ? null : deduplicateResult.getDuplicateCaseCount());
         finalResult.put("exportApi", "/api/testcase/export");
-        finalResult.put("exportCondition", Map.of("taskId", testcaseTaskId, "includeDuplicate", false));
+        finalResult.put("exportCondition", Map.of(
+                "taskId",
+                testcaseTaskId,
+                "includeDuplicate",
+                false
+        ));
 
         AgentTask latest = getAgentTask(agentTaskId);
         latest.setFinalResult(toJson(finalResult));
@@ -273,6 +335,16 @@ public class AgentAsyncProcessor {
         agentTaskMapper.updateById(latest);
     }
 
+    /**
+     * 新需求增量测试 Agent。
+     *
+     * 流程：
+     * 1. 新需求影响分析
+     * 2. 生成增量测试用例
+     * 3. 质量评审，可通过 autoReview 控制
+     * 4. 补全缺失用例，可通过 autoCompleteMissing 控制
+     * 5. 测试用例去重，可通过 autoDeduplicate 控制
+     */
     private void runIncrementalTestDesign(AgentTask agentTask) {
         int resumeFromStep = normalizeResumeStep(agentTask.getResumeFromStep());
 
@@ -283,7 +355,7 @@ public class AgentAsyncProcessor {
         final String newRequirement = agentTask.getNewRequirement();
         final String selectedSkillsJson = agentTask.getSelectedSkills();
 
-        ChangeImpactAnalyzeResultVO impactResult = null;
+        ChangeImpactAnalyzeResultVO impactResult;
 
         if (resumeFromStep <= 1) {
             impactResult = executeStep(
@@ -295,12 +367,14 @@ public class AgentAsyncProcessor {
                     () -> {
                         checkCancel(agentTaskId);
 
+                        AgentTask latestTask = getAgentTask(agentTaskId);
+
                         ChangeImpactAnalyzeRequest request = new ChangeImpactAnalyzeRequest();
                         request.setProjectId(projectId);
                         request.setBaseVersionNo(baseVersionNo);
                         request.setTargetVersionNo(targetVersionNo);
                         request.setNewRequirement(newRequirement);
-                        request.setTopK(8);
+                        request.setTopK(safeTopK(latestTask));
 
                         return requirementChangeService.analyzeImpact(request);
                     }
@@ -308,16 +382,20 @@ public class AgentAsyncProcessor {
 
             AgentTask latestTask = getAgentTask(agentTaskId);
             latestTask.setAnalysisTaskId(impactResult.getAnalysisTaskId());
+            latestTask.setUpdateTime(LocalDateTime.now());
             agentTaskMapper.updateById(latestTask);
         }
 
         String analysisTaskId = getAgentTask(agentTaskId).getAnalysisTaskId();
 
         if (!StringUtils.hasText(analysisTaskId)) {
-            throw new BusinessException(ErrorCode.AGENT_EXECUTION_ERROR, "缺少影响分析任务ID，无法继续执行");
+            throw new BusinessException(
+                    ErrorCode.AGENT_EXECUTION_ERROR,
+                    "缺少影响分析任务ID，无法继续执行"
+            );
         }
 
-        IncrementalTestCaseGenerateResultVO incrementalResult = null;
+        IncrementalTestCaseGenerateResultVO incrementalResult;
 
         if (resumeFromStep <= 2) {
             incrementalResult = executeStep(
@@ -329,10 +407,12 @@ public class AgentAsyncProcessor {
                     () -> {
                         checkCancel(agentTaskId);
 
+                        AgentTask latestTask = getAgentTask(agentTaskId);
+
                         IncrementalTestCaseGenerateRequest request = new IncrementalTestCaseGenerateRequest();
                         request.setAnalysisTaskId(analysisTaskId);
                         request.setSelectedSkills(parseSkills(selectedSkillsJson));
-                        request.setTopK(8);
+                        request.setTopK(safeTopK(latestTask));
 
                         return requirementChangeService.generateIncrementalCases(request);
                     }
@@ -340,18 +420,24 @@ public class AgentAsyncProcessor {
 
             AgentTask latestTask = getAgentTask(agentTaskId);
             latestTask.setTestcaseTaskId(incrementalResult.getTaskId());
+            latestTask.setUpdateTime(LocalDateTime.now());
             agentTaskMapper.updateById(latestTask);
         }
 
         String testcaseTaskId = getAgentTask(agentTaskId).getTestcaseTaskId();
 
         if (!StringUtils.hasText(testcaseTaskId)) {
-            throw new BusinessException(ErrorCode.AGENT_EXECUTION_ERROR, "缺少测试用例任务ID，无法继续执行");
+            throw new BusinessException(
+                    ErrorCode.AGENT_EXECUTION_ERROR,
+                    "缺少测试用例任务ID，无法继续执行"
+            );
         }
 
         TestCaseQualityReviewResultVO reviewResult = null;
 
-        if (resumeFromStep <= 3) {
+        AgentTask latestForReview = getAgentTask(agentTaskId);
+
+        if (resumeFromStep <= 3 && enabled(latestForReview.getAutoReview())) {
             reviewResult = executeStep(
                     agentTaskId,
                     3,
@@ -363,12 +449,23 @@ public class AgentAsyncProcessor {
 
                         TestCaseReviewRequest request = new TestCaseReviewRequest();
                         request.setTaskId(testcaseTaskId);
+
                         return testCaseQualityService.review(request);
                     }
             );
+        } else if (resumeFromStep <= 3) {
+            createSkippedStep(
+                    agentTaskId,
+                    3,
+                    "REVIEW",
+                    "质量评审",
+                    "autoReview=false，跳过质量评审"
+            );
         }
 
-        if (resumeFromStep <= 4) {
+        AgentTask latestForComplete = getAgentTask(agentTaskId);
+
+        if (resumeFromStep <= 4 && enabled(latestForComplete.getAutoCompleteMissing())) {
             String reviewTaskId = reviewResult == null ? null : reviewResult.getReviewTaskId();
 
             if (StringUtils.hasText(reviewTaskId)) {
@@ -381,21 +478,40 @@ public class AgentAsyncProcessor {
                         () -> {
                             checkCancel(agentTaskId);
 
+                            AgentTask latestTask = getAgentTask(agentTaskId);
+
                             MissingCaseCompleteRequest request = new MissingCaseCompleteRequest();
                             request.setTaskId(testcaseTaskId);
                             request.setReviewTaskId(reviewTaskId);
-                            request.setTopK(8);
+                            request.setTopK(safeTopK(latestTask));
+
                             return testCaseQualityService.completeMissing(request);
                         }
                 );
             } else {
-                createSkippedStep(agentTaskId, 4, "COMPLETE", "补全缺失用例", "没有本次评审结果，跳过补全");
+                createSkippedStep(
+                        agentTaskId,
+                        4,
+                        "COMPLETE",
+                        "补全缺失用例",
+                        "没有本次评审结果，跳过补全"
+                );
             }
+        } else if (resumeFromStep <= 4) {
+            createSkippedStep(
+                    agentTaskId,
+                    4,
+                    "COMPLETE",
+                    "补全缺失用例",
+                    "autoCompleteMissing=false，跳过补全"
+            );
         }
 
         TestCaseDeduplicateResultVO deduplicateResult = null;
 
-        if (resumeFromStep <= 5) {
+        AgentTask latestForDeduplicate = getAgentTask(agentTaskId);
+
+        if (resumeFromStep <= 5 && enabled(latestForDeduplicate.getAutoDeduplicate())) {
             deduplicateResult = executeStep(
                     agentTaskId,
                     5,
@@ -405,11 +521,22 @@ public class AgentAsyncProcessor {
                     () -> {
                         checkCancel(agentTaskId);
 
+                        AgentTask latestTask = getAgentTask(agentTaskId);
+
                         TestCaseDeduplicateRequest request = new TestCaseDeduplicateRequest();
                         request.setTaskId(testcaseTaskId);
-                        request.setThreshold(0.85);
+                        request.setThreshold(safeDeduplicateThreshold(latestTask));
+
                         return testCaseToolService.deduplicate(request);
                     }
+            );
+        } else if (resumeFromStep <= 5) {
+            createSkippedStep(
+                    agentTaskId,
+                    5,
+                    "DEDUPLICATE",
+                    "测试用例去重",
+                    "autoDeduplicate=false，跳过去重"
             );
         }
 
@@ -421,7 +548,12 @@ public class AgentAsyncProcessor {
         finalResult.put("targetVersionNo", targetVersionNo);
         finalResult.put("duplicateCaseCount", deduplicateResult == null ? null : deduplicateResult.getDuplicateCaseCount());
         finalResult.put("exportApi", "/api/testcase/export");
-        finalResult.put("exportCondition", Map.of("taskId", testcaseTaskId, "includeDuplicate", false));
+        finalResult.put("exportCondition", Map.of(
+                "taskId",
+                testcaseTaskId,
+                "includeDuplicate",
+                false
+        ));
 
         AgentTask latest = getAgentTask(agentTaskId);
         latest.setFinalResult(toJson(finalResult));
@@ -429,6 +561,12 @@ public class AgentAsyncProcessor {
         agentTaskMapper.updateById(latest);
     }
 
+    /**
+     * AI 应用专项测试 Agent。
+     *
+     * 流程：
+     * 1. 生成 AI 应用测试用例
+     */
     private void runAiAppTestDesign(AgentTask agentTask) {
         int resumeFromStep = normalizeResumeStep(agentTask.getResumeFromStep());
 
@@ -441,7 +579,7 @@ public class AgentAsyncProcessor {
         final String userGoal = agentTask.getUserGoal();
         final String selectedSkillsJson = agentTask.getSelectedSkills();
 
-        AiAppTestGenerateResultVO aiAppResult = null;
+        AiAppTestGenerateResultVO aiAppResult;
 
         if (resumeFromStep <= 1) {
             aiAppResult = executeStep(
@@ -453,6 +591,8 @@ public class AgentAsyncProcessor {
                     () -> {
                         checkCancel(agentTaskId);
 
+                        AgentTask latestTask = getAgentTask(agentTaskId);
+
                         AiAppTestGenerateRequest request = new AiAppTestGenerateRequest();
                         request.setProjectId(projectId);
                         request.setVersionNo(targetVersionNo);
@@ -461,7 +601,8 @@ public class AgentAsyncProcessor {
                         request.setAppDescription(appDescription);
                         request.setGenerateGoal(userGoal);
                         request.setSelectedSkills(parseSkills(selectedSkillsJson));
-                        request.setTopK(8);
+                        request.setTestDimensions(parseStringList(latestTask.getTestDimensions()));
+                        request.setTopK(safeTopK(latestTask));
 
                         return aiAppTestService.generate(request);
                     }
@@ -469,10 +610,18 @@ public class AgentAsyncProcessor {
 
             AgentTask latestTask = getAgentTask(agentTaskId);
             latestTask.setAiAppTaskId(aiAppResult.getTaskId());
+            latestTask.setUpdateTime(LocalDateTime.now());
             agentTaskMapper.updateById(latestTask);
         }
 
         String aiAppTaskId = getAgentTask(agentTaskId).getAiAppTaskId();
+
+        if (!StringUtils.hasText(aiAppTaskId)) {
+            throw new BusinessException(
+                    ErrorCode.AGENT_EXECUTION_ERROR,
+                    "缺少 AI 应用测试任务ID，无法继续执行"
+            );
+        }
 
         Map<String, Object> finalResult = new LinkedHashMap<>();
         finalResult.put("workflowType", "AI_APP_TEST_DESIGN");
@@ -486,6 +635,9 @@ public class AgentAsyncProcessor {
         agentTaskMapper.updateById(latest);
     }
 
+    /**
+     * 执行单个 Agent 步骤。
+     */
     private <T> T executeStep(
             String agentTaskId,
             Integer stepIndex,
@@ -581,6 +733,9 @@ public class AgentAsyncProcessor {
         }
     }
 
+    /**
+     * 创建跳过步骤记录。
+     */
     private void createSkippedStep(
             String agentTaskId,
             Integer stepIndex,
@@ -620,15 +775,13 @@ public class AgentAsyncProcessor {
         task.setCancelRequested(0);
         task.setStartTime(task.getStartTime() == null ? LocalDateTime.now() : task.getStartTime());
         task.setUpdateTime(LocalDateTime.now());
+
         agentTaskMapper.updateById(task);
     }
 
     private void markAgentFailed(String agentTaskId, String errorMessage) {
         AgentTask task = getAgentTask(agentTaskId);
 
-        /*
-         * 如果用户已请求取消，则最终状态标记为 CANCELLED。
-         */
         if (task.getCancelRequested() != null && task.getCancelRequested() == 1) {
             task.setStatus("CANCELLED");
         } else {
@@ -638,6 +791,7 @@ public class AgentAsyncProcessor {
         task.setErrorMessage(errorMessage);
         task.setEndTime(LocalDateTime.now());
         task.setUpdateTime(LocalDateTime.now());
+
         agentTaskMapper.updateById(task);
     }
 
@@ -645,7 +799,10 @@ public class AgentAsyncProcessor {
         AgentTask task = getAgentTask(agentTaskId);
 
         if (task.getCancelRequested() != null && task.getCancelRequested() == 1) {
-            throw new BusinessException(ErrorCode.AGENT_EXECUTION_ERROR, "Agent 任务已被用户取消");
+            throw new BusinessException(
+                    ErrorCode.AGENT_EXECUTION_ERROR,
+                    "Agent 任务已被用户取消"
+            );
         }
     }
 
@@ -657,16 +814,20 @@ public class AgentAsyncProcessor {
         );
 
         if (task == null) {
-            throw new BusinessException(ErrorCode.NOT_FOUND_ERROR, "Agent 任务不存在");
+            throw new BusinessException(
+                    ErrorCode.NOT_FOUND_ERROR,
+                    "Agent 任务不存在"
+            );
         }
 
         return task;
     }
 
-    private Integer normalizeResumeStep(Integer resumeFromStep) {
+    private int normalizeResumeStep(Integer resumeFromStep) {
         if (resumeFromStep == null || resumeFromStep <= 0) {
             return 1;
         }
+
         return resumeFromStep;
     }
 
@@ -676,11 +837,46 @@ public class AgentAsyncProcessor {
         }
 
         try {
-            return objectMapper.readValue(selectedSkillsJson, new TypeReference<List<String>>() {
-            });
+            return objectMapper.readValue(
+                    selectedSkillsJson,
+                    new TypeReference<List<String>>() {
+                    }
+            );
         } catch (Exception e) {
             return List.of();
         }
+    }
+
+    private List<String> parseStringList(String json) {
+        if (!StringUtils.hasText(json) || "null".equals(json)) {
+            return List.of();
+        }
+
+        try {
+            return objectMapper.readValue(
+                    json,
+                    new TypeReference<List<String>>() {
+                    }
+            );
+        } catch (Exception e) {
+            return List.of();
+        }
+    }
+
+    private int safeTopK(AgentTask task) {
+        return task.getTopK() == null || task.getTopK() <= 0
+                ? 8
+                : task.getTopK();
+    }
+
+    private double safeDeduplicateThreshold(AgentTask task) {
+        return task.getDeduplicateThreshold() == null
+                ? 0.85
+                : task.getDeduplicateThreshold();
+    }
+
+    private boolean enabled(Integer value) {
+        return value == null || value == 1;
     }
 
     private String toJson(Object object) {
@@ -688,9 +884,13 @@ public class AgentAsyncProcessor {
             if (object == null) {
                 return "null";
             }
+
             return objectMapper.writeValueAsString(object);
         } catch (Exception e) {
-            throw new BusinessException(ErrorCode.SYSTEM_ERROR, "JSON 序列化失败：" + e.getMessage());
+            throw new BusinessException(
+                    ErrorCode.SYSTEM_ERROR,
+                    "JSON 序列化失败：" + e.getMessage()
+            );
         }
     }
 
@@ -742,7 +942,10 @@ public class AgentAsyncProcessor {
                     stepType,
                     stepName,
                     "TIMEOUT",
-                    "步骤执行耗时超过阈值，durationMs=" + durationMs + "，timeoutMs=" + timeoutMs,
+                    "步骤执行耗时超过阈值，durationMs="
+                            + durationMs
+                            + "，timeoutMs="
+                            + timeoutMs,
                     null,
                     null,
                     durationMs
@@ -754,7 +957,7 @@ public class AgentAsyncProcessor {
     private interface StepExecutor<T> {
 
         /**
-         * 执行步骤
+         * 执行步骤。
          */
         T execute();
     }

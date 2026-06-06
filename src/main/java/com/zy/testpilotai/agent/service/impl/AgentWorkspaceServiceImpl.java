@@ -178,6 +178,17 @@ public class AgentWorkspaceServiceImpl implements com.zy.testpilotai.agent.servi
         task.setRetryCount(0);
         task.setResumeFromStep(1);
 
+        task.setTopK(request.getTopK() == null ? 8 : request.getTopK());
+        task.setAutoReview(Boolean.FALSE.equals(request.getAutoReview()) ? 0 : 1);
+        task.setAutoCompleteMissing(Boolean.FALSE.equals(request.getAutoCompleteMissing()) ? 0 : 1);
+        task.setAutoDeduplicate(Boolean.FALSE.equals(request.getAutoDeduplicate()) ? 0 : 1);
+        task.setDeduplicateThreshold(
+                request.getDeduplicateThreshold() == null
+                        ? 0.85
+                        : request.getDeduplicateThreshold()
+        );
+        task.setTestDimensions(toJson(request.getTestDimensions()));
+
         task.setCreateTime(LocalDateTime.now());
         task.setUpdateTime(LocalDateTime.now());
 
@@ -289,6 +300,12 @@ public class AgentWorkspaceServiceImpl implements com.zy.testpilotai.agent.servi
         vo.setTestcaseTaskId(task.getTestcaseTaskId());
         vo.setAiAppTaskId(task.getAiAppTaskId());
         vo.setErrorMessage(task.getErrorMessage());
+        vo.setTopK(task.getTopK());
+        vo.setAutoReview(task.getAutoReview());
+        vo.setAutoCompleteMissing(task.getAutoCompleteMissing());
+        vo.setAutoDeduplicate(task.getAutoDeduplicate());
+        vo.setDeduplicateThreshold(task.getDeduplicateThreshold());
+        vo.setTestDimensions(task.getTestDimensions());
         vo.setCreateTime(task.getCreateTime());
         vo.setUpdateTime(task.getUpdateTime());
 

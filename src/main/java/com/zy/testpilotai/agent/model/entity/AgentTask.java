@@ -143,6 +143,43 @@ public class AgentTask {
      */
     private Integer resumeFromStep;
 
+    /**
+     * RAG 召回数量。
+     */
+    private Integer topK;
+
+    /**
+     * 是否自动质量评审：
+     * 1：是
+     * 0：否
+     */
+    private Integer autoReview;
+
+    /**
+     * 是否自动补全缺失用例：
+     * 1：是
+     * 0：否
+     */
+    private Integer autoCompleteMissing;
+
+    /**
+     * 是否自动去重：
+     * 1：是
+     * 0：否
+     */
+    private Integer autoDeduplicate;
+
+    /**
+     * 去重阈值。
+     */
+    private Double deduplicateThreshold;
+
+    /**
+     * AI 应用测试维度 JSON。
+     */
+    @TableField(jdbcType = JdbcType.OTHER, typeHandler = JsonbTypeHandler.class)
+    private String testDimensions;
+
     private LocalDateTime createTime;
 
     private LocalDateTime updateTime;

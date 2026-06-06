@@ -133,6 +133,36 @@ public class AgentTaskVO {
     private Integer resumeFromStep;
 
     /**
+     * RAG 召回数量。
+     */
+    private Integer topK;
+
+    /**
+     * 是否自动质量评审。
+     */
+    private Integer autoReview;
+
+    /**
+     * 是否自动补全缺失用例。
+     */
+    private Integer autoCompleteMissing;
+
+    /**
+     * 是否自动去重。
+     */
+    private Integer autoDeduplicate;
+
+    /**
+     * 去重阈值。
+     */
+    private Double deduplicateThreshold;
+
+    /**
+     * AI 应用测试维度 JSON。
+     */
+    private String testDimensions;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createTime;

@@ -1,0 +1,20 @@
+-- Agent 请求参数持久化增强
+
+ALTER TABLE agent_task
+    ADD COLUMN IF NOT EXISTS top_k INT DEFAULT 8;
+
+ALTER TABLE agent_task
+    ADD COLUMN IF NOT EXISTS auto_review SMALLINT DEFAULT 1;
+
+ALTER TABLE agent_task
+    ADD COLUMN IF NOT EXISTS auto_complete_missing SMALLINT DEFAULT 1;
+
+ALTER TABLE agent_task
+    ADD COLUMN IF NOT EXISTS auto_deduplicate SMALLINT DEFAULT 1;
+
+ALTER TABLE agent_task
+    ADD COLUMN IF NOT EXISTS deduplicate_threshold DOUBLE PRECISION DEFAULT 0.85;
+
+-- AI_APP_TEST_DESIGN 使用
+ALTER TABLE agent_task
+    ADD COLUMN IF NOT EXISTS test_dimensions JSONB;
