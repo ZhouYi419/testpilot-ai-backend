@@ -1,161 +1,158 @@
-package com.zy.testpilotai.testcase.model.entity;
+package com.zy.testpilotai.testcase.model.vo;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 import java.time.LocalDateTime;
 
 @Data
-@TableName("test_case")
-public class TestCase {
+public class TestCaseManualVO {
 
-    @TableId(type = IdType.AUTO)
+    /**
+     * 用例主键ID
+     */
     private Long id;
 
     /**
-     * 测试用例生成任务 ID。
+     * 关联的 AI 生成任务ID
      */
     private String taskId;
 
     /**
-     * 项目 ID。
+     * 归属的项目ID
      */
     private Long projectId;
 
     /**
-     * 版本号。
+     * 关联的文档版本号
      */
     private String versionNo;
 
     /**
-     * 模块编码。
+     * 关联的模块编码
      */
     private String moduleCode;
 
     /**
-     * 模块名称。
+     * 关联的模块名称
      */
     private String moduleName;
 
     /**
-     * 用例标题。
+     * 测试用例标题
      */
     private String caseTitle;
 
     /**
-     * 用例类型。
+     * 用例类型
      */
     private String caseType;
 
     /**
-     * 优先级：P0 / P1 / P2 / P3。
+     * 用例优先级
      */
     private String priority;
 
     /**
-     * 前置条件。
+     * 前置条件
      */
     private String precondition;
 
     /**
-     * 测试步骤 JSON。
+     * 测试执行步骤
      */
     private String steps;
 
     /**
-     * 预期结果。
+     * 预期结果
      */
     private String expectedResult;
 
     /**
-     * 测试数据 JSON。
+     * 测试数据
      */
     private String testData;
 
     /**
-     * 来源引用 JSON。
+     * 需求溯源引用
      */
     private String sourceReferences;
 
     /**
-     * 风险点。
+     * 风险提示/测试注意点
      */
     private String riskPoint;
 
     /**
-     * 自动化建议。
+     * 自动化测试建议
      */
     private String automationSuggestion;
 
     /**
-     * 用例质量评分。
+     * AI 给出的用例质量打分 (0-100)
      */
     private Double qualityScore;
 
     /**
-     * 重复状态：
-     * NORMAL / DUPLICATE。
+     * 智能去重状态
      */
     private String duplicateStatus;
 
     /**
-     * 重复来源用例 ID。
+     * 重复关联的源用例ID
      */
     private Long duplicateOfCaseId;
 
     /**
-     * 重复相似度。
+     * 向量相似度/重复度得分
      */
     private Double duplicateScore;
 
     /**
-     * 重复原因。
+     * 判定为重复的具体原因
      */
     private String duplicateReason;
 
     /**
-     * 来源类型：
-     * AI_GENERATED / AI_COMPLETED / AI_INCREMENTAL / MANUAL。
+     * 用例来源类型
      */
     private String sourceType;
 
     /**
-     * 人工审核状态：
-     * AI_GENERATED：AI 生成，未人工处理
-     * HUMAN_REVIEWED：人工已编辑 / 已确认
-     * ACCEPTED：已采纳进入正式用例库
-     * REJECTED：已驳回
-     * DELETED：已删除
+     * 人工审核状态 (Human-in-the-loop 核心)
      */
     private String reviewStatus;
 
     /**
-     * 审核人。
+     * 审核人账号/姓名
      */
     private String reviewer;
 
     /**
-     * 审核时间。
+     * 审核操作发生的时间
      */
     private LocalDateTime reviewTime;
 
     /**
-     * 人工备注。
+     * 人工审核时的批注/意见
      */
     private String manualComment;
 
     /**
-     * 采纳时间。
+     * 最终被采纳/入库的时间
      */
     private LocalDateTime acceptedTime;
 
     /**
-     * 驳回时间。
+     * 被彻底驳回/废弃的时间
      */
     private LocalDateTime rejectedTime;
 
+    /**
+     * 记录创建时间
+     */
     private LocalDateTime createTime;
 
+    /**
+     * 记录更新时间
+     */
     private LocalDateTime updateTime;
 }
