@@ -76,8 +76,12 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
             String userPrompt = promptBuilder.buildReviewUserPrompt(sourceTask, testCases);
 
             // 4. 调用 LLM 做质量评审
-            String rawOutput = llmClient.chat(systemPrompt, userPrompt);
-
+            String rawOutput = llmClient.chat(
+                    systemPrompt,
+                    userPrompt,
+                    "TESTCASE_REVIEW",
+                    reviewTaskId
+            );
             // 5. 解析模型返回的 JSON
             String json = JsonExtractUtils.extractJsonObject(rawOutput);
             JsonNode root = objectMapper.readTree(json);
@@ -165,7 +169,12 @@ public class TestCaseQualityServiceImpl implements TestCaseQualityService {
 
         try {
             // 6. 调用 LLM 补全缺失用例
-            String rawOutput = llmClient.chat(systemPrompt, userPrompt);
+            String rawOutput = llmClient.chat(
+                    systemPrompt,
+                    userPrompt,
+                    "TESTCASE_COMPLETE_MISSING",
+                    sourceTask.getTaskId()
+            );
 
             // 7. 解析补全用例
             List<TestCase> addedCases = parseAndBuildTestCases(

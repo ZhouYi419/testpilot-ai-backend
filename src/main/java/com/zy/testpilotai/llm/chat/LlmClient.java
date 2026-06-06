@@ -11,4 +11,16 @@ public interface LlmClient {
      * 调用聊天模型。
      */
     String chat(String systemPrompt, String userPrompt);
+
+    /**
+     * 带业务上下文的模型调用。
+     */
+    default String chat(
+            String systemPrompt,
+            String userPrompt,
+            String bizType,
+            String bizId
+    ) {
+        return chat(systemPrompt, userPrompt);
+    }
 }

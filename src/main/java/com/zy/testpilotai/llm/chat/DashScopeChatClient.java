@@ -25,33 +25,18 @@ public class DashScopeChatClient implements LlmClient {
 
     private final ObjectMapper objectMapper;
 
-    /**
-     * DashScope API Key。
-     */
     @Value("${ai.chat.dashscope.api-key:}")
     private String apiKey;
 
-    /**
-     * DashScope OpenAI Compatible Chat Completions endpoint。
-     */
     @Value("${ai.chat.dashscope.endpoint}")
     private String endpoint;
 
-    /**
-     * 聊天模型名称，例如 qwen-plus。
-     */
     @Value("${ai.chat.dashscope.model-name:qwen-plus}")
     private String modelName;
 
-    /**
-     * 模型温度。
-     */
     @Value("${ai.chat.dashscope.temperature:0.2}")
     private Double temperature;
 
-    /**
-     * HTTP 超时时间。
-     */
     @Value("${ai.chat.dashscope.timeout-seconds:120}")
     private int timeoutSeconds;
 

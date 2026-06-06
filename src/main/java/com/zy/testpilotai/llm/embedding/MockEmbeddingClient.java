@@ -10,18 +10,12 @@ import java.util.ArrayList;
 import java.util.List;
 
 @Component
-@ConditionalOnProperty(name = "ai.embedding.provider", havingValue = "mock", matchIfMissing = true)
+@ConditionalOnProperty(name = "ai.embedding.provider", havingValue = "mock")
 public class MockEmbeddingClient implements EmbeddingClient {
 
-    /**
-     * Mock 模型名称。
-     */
     @Value("${ai.embedding.mock.model-name:mock-hash-embedding-v1}")
     private String modelName;
 
-    /**
-     * 向量维度。
-     */
     @Value("${ai.embedding.dimension:1024}")
     private int dimension;
 
@@ -37,6 +31,11 @@ public class MockEmbeddingClient implements EmbeddingClient {
 
     @Override
     public List<Float> embed(String text) {
+        return embed(text, null, null);
+    }
+
+    @Override
+    public List<Float> embed(String text, String bizType, String bizId) {
         if (!StringUtils.hasText(text)) {
             text = "";
         }

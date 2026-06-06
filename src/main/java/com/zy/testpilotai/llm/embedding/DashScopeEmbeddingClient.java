@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
+
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -21,38 +22,23 @@ import java.util.Map;
 
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(name = "ai.embedding.provider", havingValue = "dashscope")
+@ConditionalOnProperty(name = "ai.embedding.provider", havingValue = "dashscope", matchIfMissing = true)
 public class DashScopeEmbeddingClient implements EmbeddingClient {
 
     private final ObjectMapper objectMapper;
 
-    /**
-     * DashScope API Key。
-     */
     @Value("${ai.embedding.dashscope.api-key:}")
     private String apiKey;
 
-    /**
-     * DashScope OpenAI Compatible Embedding endpoint。
-     */
     @Value("${ai.embedding.dashscope.endpoint}")
     private String endpoint;
 
-    /**
-     * Embedding 模型名称。
-     */
     @Value("${ai.embedding.dashscope.model-name:text-embedding-v4}")
     private String modelName;
 
-    /**
-     * 向量维度。
-     */
     @Value("${ai.embedding.dimension:1024}")
     private int dimension;
 
-    /**
-     * HTTP 请求超时时间。
-     */
     @Value("${ai.embedding.dashscope.timeout-seconds:60}")
     private int timeoutSeconds;
 
@@ -70,6 +56,11 @@ public class DashScopeEmbeddingClient implements EmbeddingClient {
 
     @Override
     public List<Float> embed(String text) {
+        return embed(text, null, null);
+    }
+
+    @Override
+    public List<Float> embed(String text, String bizType, String bizId) {
         if (!StringUtils.hasText(apiKey)) {
             throw new BusinessException(
                     ErrorCode.AI_EMBEDDING_ERROR,
@@ -77,9 +68,11 @@ public class DashScopeEmbeddingClient implements EmbeddingClient {
             );
         }
 
-        if (!StringUtils.hasText(text)) {
+        if (text == null) {
             text = "";
         }
+
+        long startMillis = System.currentTimeMillis();
 
         try {
             Map<String, Object> requestBody = new LinkedHashMap<>();
@@ -117,9 +110,14 @@ public class DashScopeEmbeddingClient implements EmbeddingClient {
         } catch (BusinessException e) {
             throw e;
         } catch (Exception e) {
+            long durationMs = System.currentTimeMillis() - startMillis;
+
             throw new BusinessException(
                     ErrorCode.AI_EMBEDDING_ERROR,
-                    "DashScope Embedding 调用异常：" + e.getMessage()
+                    "DashScope Embedding 调用异常，耗时 "
+                            + durationMs
+                            + " ms，原因："
+                            + e.getMessage()
             );
         }
     }
@@ -144,7 +142,7 @@ public class DashScopeEmbeddingClient implements EmbeddingClient {
                 );
             }
 
-            List<Float> vector = new ArrayList<>();
+            List<Float> vector = new ArrayList<>(embeddingNode.size());
 
             for (JsonNode item : embeddingNode) {
                 vector.add((float) item.asDouble());

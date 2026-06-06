@@ -83,7 +83,12 @@ public class TestCaseGenerateServiceImpl implements TestCaseGenerateService {
             String userPrompt = promptBuilder.buildUserPrompt(request, ragContext);
 
             // 4. 调用 LLM
-            String rawOutput = llmClient.chat(systemPrompt, userPrompt);
+            String rawOutput = llmClient.chat(
+                    systemPrompt,
+                    userPrompt,
+                    "TESTCASE_GENERATE",
+                    taskId
+            );
 
             // 5. 保存模型原始输出，方便排查问题
             task.setRawModelOutput(rawOutput);

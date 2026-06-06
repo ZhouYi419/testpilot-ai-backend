@@ -89,7 +89,12 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
             );
 
             // 4. 调用 LLM 做影响分析
-            String rawOutput = llmClient.chat(systemPrompt, userPrompt);
+            String rawOutput = llmClient.chat(
+                    systemPrompt,
+                    userPrompt,
+                    "REQUIREMENT_IMPACT",
+                    analysisTaskId
+            );
 
             // 5. 解析模型输出
             String json = JsonExtractUtils.extractJsonObject(rawOutput);
@@ -179,7 +184,12 @@ public class RequirementChangeServiceImpl implements RequirementChangeService {
             );
 
             // 4. 调用 LLM 生成增量测试用例
-            String rawOutput = llmClient.chat(systemPrompt, userPrompt);
+            String rawOutput = llmClient.chat(
+                    systemPrompt,
+                    userPrompt,
+                    "INCREMENTAL_TESTCASE_GENERATE",
+                    taskId
+            );
 
             // 5. 保存模型原始输出到生成任务
             generateTask.setRawModelOutput(rawOutput);

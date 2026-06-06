@@ -69,7 +69,12 @@ public class AiAppTestServiceImpl implements AiAppTestService {
             String userPrompt = promptBuilder.buildUserPrompt(request, ragContext);
 
             // 3. 调用 LLM
-            String rawOutput = llmClient.chat(systemPrompt, userPrompt);
+            String rawOutput = llmClient.chat(
+                    systemPrompt,
+                    userPrompt,
+                    "AI_APP_TEST_GENERATE",
+                    taskId
+            );
 
             // 4. 保存模型原始输出
             task.setRawModelOutput(rawOutput);

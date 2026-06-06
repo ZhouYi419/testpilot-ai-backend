@@ -22,6 +22,31 @@ spring:
       max-file-size: 50MB
       max-request-size: 60MB
 
+  ai:
+    model:
+      chat: openai
+      embedding: openai
+      image: none
+      audio:
+        speech: none
+        transcription: none
+
+    openai:
+      api-key: ${DASHSCOPE_API_KEY:}
+
+      base-url: https://dashscope.aliyuncs.com/compatible-mode/v1
+
+      chat:
+        completions-path: /chat/completions
+        options:
+          model: qwen-plus
+          temperature: 0.2
+
+      embedding:
+        embeddings-path: /embeddings
+        options:
+          model: text-embedding-v4
+
 mybatis-plus:
   configuration:
     map-underscore-to-camel-case: true
@@ -42,47 +67,42 @@ springdoc:
     path: /swagger-ui.html
 
 ai:
-  embedding:
-    provider: dashscope
+  # Chat 模型配置
+  chat:
+    provider: spring-ai
 
-    # 通用维度配置
+    mock:
+      model-name: mock-qwen-plus
+
+    dashscope:
+      api-key: ${DASHSCOPE_API_KEY:}
+      endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+      model-name: qwen-plus
+      timeout-seconds: 120
+      temperature: 0.2
+
+    spring-ai:
+      model-name: qwen-plus
+
+  # Embedding 配置
+  embedding:
+    provider: spring-ai
+
     dimension: 1024
 
-    # mock 模式配置
     mock:
       model-name: mock-hash-embedding-v1
 
-    # DashScope 模式配置
     dashscope:
-      # 阿里云百炼 API Key
       api-key: ${DASHSCOPE_API_KEY:}
-
-      # DashScope OpenAI Compatible Embedding 接口
       endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1/embeddings
-
-      # Embedding 模型名称
       model-name: text-embedding-v4
-
-      # 请求超时时间，单位秒
       timeout-seconds: 60
 
-    chat:
-      provider: dashscope
-
-      mock:
-        model-name: mock-qwen-plus
-
-      dashscope:
-        api-key: ${DASHSCOPE_API_KEY:}
-        endpoint: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
-        model-name: qwen-plus
-        timeout-seconds: 120
-        temperature: 0.2
+    spring-ai:
+      model-name: text-embedding-v4
 
 agent:
   execution:
-    # Agent 总任务超时时间，单位秒
     task-timeout-seconds: 1800
-
-    # 单个步骤超时时间，单位秒
     step-timeout-seconds: 600
