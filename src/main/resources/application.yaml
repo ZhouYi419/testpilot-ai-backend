@@ -106,3 +106,7 @@ agent:
   execution:
     task-timeout-seconds: 1800
     step-timeout-seconds: 600
+
+ai-eval:
+  execution:
+    http-timeout-seconds: 120
