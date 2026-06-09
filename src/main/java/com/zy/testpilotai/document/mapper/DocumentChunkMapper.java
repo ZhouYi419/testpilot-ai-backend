@@ -56,6 +56,7 @@ public interface DocumentChunkMapper extends BaseMapper<DocumentChunk> {
      * 6. score = 1 - distance，分数越高表示越相似。
      */
     @Select("""
+            <script>
             SELECT
                 id,
                 project_id,
@@ -76,15 +77,20 @@ public interface DocumentChunkMapper extends BaseMapper<DocumentChunk> {
                 embedding_status,
                 embedding_model,
                 embedded_time,
-                1 - (embedding <=> CAST(#{embeddingText} AS vector)) AS score
+                1 - (embedding &lt;=&gt; CAST(#{embeddingText} AS vector)) AS score
             FROM document_chunk
             WHERE chunk_type = 'CHILD'
               AND embedding IS NOT NULL
               AND project_id = #{projectId}
-              AND (#{versionNo} IS NULL OR version_no = #{versionNo})
-              AND (#{moduleCode} IS NULL OR module_code = #{moduleCode})
-            ORDER BY embedding <=> CAST(#{embeddingText} AS vector)
+              <if test="versionNo != null and versionNo != ''">
+              AND version_no = #{versionNo}
+              </if>
+              <if test="moduleCode != null and moduleCode != ''">
+              AND module_code = #{moduleCode}
+              </if>
+            ORDER BY embedding &lt;=&gt; CAST(#{embeddingText} AS vector)
             LIMIT #{topK}
+            </script>
             """)
     List<KnowledgeSearchRow> searchByVector(
             @Param("projectId") Long projectId,

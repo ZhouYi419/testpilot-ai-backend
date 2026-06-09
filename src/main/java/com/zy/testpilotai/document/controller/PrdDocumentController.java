@@ -10,10 +10,17 @@ import com.zy.testpilotai.document.service.PrdDocumentService;
 import com.zy.testpilotai.document.service.PrdParseService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 
 @Validated
@@ -25,6 +32,11 @@ public class PrdDocumentController {
     private final PrdDocumentService prdDocumentService;
 
     private final PrdParseService prdParseService;
+
+    private final HttpClient imageHttpClient = HttpClient.newBuilder()
+            .connectTimeout(Duration.ofSeconds(8))
+            .followRedirects(HttpClient.Redirect.NORMAL)
+            .build();
 
     /**
      * 上传prd文件
@@ -59,5 +71,39 @@ public class PrdDocumentController {
             @RequestParam(required = false) String chunkType
     ) {
         return ResultUtils.success(prdParseService.listChunks(id, chunkType));
+    }
+
+    /**
+     * 图片代理预览，避免外链 CDN Referer 限制导致前端图片无法直接展示。
+     */
+    @GetMapping("/image-proxy")
+    public ResponseEntity<byte[]> proxyImage(@RequestParam String url) throws Exception {
+        URI uri = URI.create(url);
+        String scheme = uri.getScheme();
+        if (!"http".equalsIgnoreCase(scheme) && !"https".equalsIgnoreCase(scheme)) {
+            return ResponseEntity.badRequest().build();
+        }
+
+        HttpRequest request = HttpRequest.newBuilder(uri)
+                .timeout(Duration.ofSeconds(15))
+                .header("User-Agent", "Mozilla/5.0")
+                .header("Referer", "")
+                .GET()
+                .build();
+
+        HttpResponse<byte[]> response = imageHttpClient.send(request, HttpResponse.BodyHandlers.ofByteArray());
+        if (response.statusCode() < 200 || response.statusCode() >= 300) {
+            return ResponseEntity.status(response.statusCode()).build();
+        }
+
+        String contentType = response.headers()
+                .firstValue(HttpHeaders.CONTENT_TYPE)
+                .filter(value -> value.toLowerCase().startsWith("image/"))
+                .orElse(MediaType.APPLICATION_OCTET_STREAM_VALUE);
+
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_TYPE, contentType)
+                .header(HttpHeaders.CACHE_CONTROL, "public, max-age=86400")
+                .body(response.body());
     }
 }

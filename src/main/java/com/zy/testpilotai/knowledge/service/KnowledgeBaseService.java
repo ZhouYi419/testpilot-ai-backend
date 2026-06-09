@@ -1,6 +1,7 @@
 package com.zy.testpilotai.knowledge.service;
 
 import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
+import com.zy.testpilotai.knowledge.model.vo.KnowledgeAnswerVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildResultVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildTaskVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeSearchResultVO;
@@ -28,4 +29,9 @@ public interface KnowledgeBaseService {
      * 构建 RAG 上下文。
      */
     RagContextVO buildRagContext(KnowledgeSearchRequest request);
+
+    /**
+     * 基于知识库召回内容生成问答结果。
+     */
+    KnowledgeAnswerVO answer(KnowledgeSearchRequest request);
 }

@@ -3,6 +3,7 @@ package com.zy.testpilotai.knowledge.controller;
 import com.zy.testpilotai.common.response.BaseResponse;
 import com.zy.testpilotai.common.response.ResultUtils;
 import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
+import com.zy.testpilotai.knowledge.model.vo.KnowledgeAnswerVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildResultVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildTaskVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeSearchResultVO;
@@ -84,5 +85,15 @@ public class KnowledgeController {
             @RequestBody @Valid KnowledgeSearchRequest request
     ) {
         return ResultUtils.success(knowledgeBaseService.buildRagContext(request));
+    }
+
+    /**
+     * 基于知识库召回结果生成问答答案。
+     */
+    @PostMapping("/answer")
+    public BaseResponse<KnowledgeAnswerVO> answer(
+            @RequestBody @Valid KnowledgeSearchRequest request
+    ) {
+        return ResultUtils.success(knowledgeBaseService.answer(request));
     }
 }

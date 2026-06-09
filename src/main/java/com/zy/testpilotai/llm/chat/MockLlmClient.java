@@ -46,7 +46,23 @@ public class MockLlmClient implements LlmClient {
             return mockCompleteMissingResult();
         }
 
+        if (userPrompt != null && userPrompt.contains("【RAG 问答输出】")) {
+            return mockRagAnswer();
+        }
+
         return mockGenerateResult();
+    }
+
+    private String mockRagAnswer() {
+        return """
+                根据当前知识库资料，问题涉及的功能规则如下：
+
+                1. 命中的需求资料中已经描述了相关功能的处理流程和约束，可以作为回答依据。
+                2. 若资料中只出现部分规则，未出现的异常分支、边界条件或配置项不能直接推断。
+                3. 建议以引用来源中的章节为准继续确认具体实现细节。
+
+                以上回答仅基于本次召回的知识库资料生成。
+                """;
     }
 
     private String mockChunkStrategy(String userPrompt) {

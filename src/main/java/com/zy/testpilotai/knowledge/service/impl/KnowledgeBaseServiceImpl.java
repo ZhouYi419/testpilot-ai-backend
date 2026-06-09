@@ -12,15 +12,18 @@ import com.zy.testpilotai.knowledge.mapper.KnowledgeBuildTaskMapper;
 import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRequest;
 import com.zy.testpilotai.knowledge.model.dto.KnowledgeSearchRow;
 import com.zy.testpilotai.knowledge.model.entity.KnowledgeBuildTask;
+import com.zy.testpilotai.knowledge.model.vo.KnowledgeAnswerVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildResultVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeBuildTaskVO;
 import com.zy.testpilotai.knowledge.model.vo.KnowledgeSearchResultVO;
 import com.zy.testpilotai.knowledge.model.vo.RagContextVO;
 import com.zy.testpilotai.knowledge.service.KnowledgeBaseService;
+import com.zy.testpilotai.llm.chat.LlmClient;
 import com.zy.testpilotai.llm.embedding.EmbeddingClient;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.CollectionUtils;
 import org.springframework.util.StringUtils;
 import java.time.LocalDateTime;
 import java.util.List;
@@ -30,6 +33,14 @@ import java.util.UUID;
 @RequiredArgsConstructor
 public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
 
+    private static final int MAX_CONTEXT_CHARS = 12_000;
+
+    private static final int MAX_REFERENCE_CHARS = 2_500;
+
+    private static final String RAG_ANSWER_BIZ_TYPE = "KNOWLEDGE_RAG_ANSWER";
+
+    private static final String EMPTY_ANSWER = "未检索到相关知识库内容，无法基于资料回答。";
+
     private final PrdDocumentMapper prdDocumentMapper;
 
     private final DocumentChunkMapper documentChunkMapper;
@@ -37,6 +48,8 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
     private final KnowledgeBuildTaskMapper knowledgeBuildTaskMapper;
 
     private final EmbeddingClient embeddingClient;
+
+    private final LlmClient llmClient;
 
     @Override
     @Transactional(rollbackFor = Exception.class)
@@ -250,6 +263,132 @@ public class KnowledgeBaseServiceImpl implements KnowledgeBaseService {
         vo.setReferences(references);
 
         return vo;
+    }
+
+    @Override
+    public KnowledgeAnswerVO answer(KnowledgeSearchRequest request) {
+        List<KnowledgeSearchResultVO> references = search(request);
+        Integer topK = normalizeTopK(request.getTopK());
+
+        KnowledgeAnswerVO vo = new KnowledgeAnswerVO();
+        vo.setQuery(request.getQuery());
+        vo.setProjectId(request.getProjectId());
+        vo.setVersionNo(request.getVersionNo());
+        vo.setModuleCode(request.getModuleCode());
+        vo.setTopK(topK);
+        vo.setLlmModel(llmClient.modelName());
+        vo.setReferences(references);
+
+        if (CollectionUtils.isEmpty(references)) {
+            vo.setAnswer(EMPTY_ANSWER);
+            return vo;
+        }
+
+        String systemPrompt = buildRagAnswerSystemPrompt();
+        String userPrompt = buildRagAnswerUserPrompt(request, references);
+        String answer = llmClient.chat(
+                systemPrompt,
+                userPrompt,
+                RAG_ANSWER_BIZ_TYPE,
+                buildRagAnswerBizId(request)
+        );
+
+        if (!StringUtils.hasText(answer)) {
+            throw new BusinessException(ErrorCode.AI_CHAT_ERROR, "知识库问答生成失败，LLM 返回为空");
+        }
+
+        vo.setAnswer(answer.trim());
+        return vo;
+    }
+
+    private String buildRagAnswerSystemPrompt() {
+        return """
+                你是一个严谨的知识库问答助手。
+                你只能基于用户提供的【知识库资料】回答问题，不要编造资料中没有出现的业务规则、字段、流程或结论。
+                如果资料不足以回答问题，请明确说明“知识库资料不足以确认”，并指出缺少哪些信息。
+                回答使用中文，结构清晰，优先给出直接结论，再补充依据。
+                如引用资料，请使用“资料 1”“资料 2”这样的编号。
+                """;
+    }
+
+    private String buildRagAnswerUserPrompt(
+            KnowledgeSearchRequest request,
+            List<KnowledgeSearchResultVO> references
+    ) {
+        StringBuilder prompt = new StringBuilder();
+        prompt.append("【RAG 问答输出】\n\n");
+        prompt.append("【问题】\n")
+                .append(request.getQuery())
+                .append("\n\n");
+        prompt.append("【知识库资料】\n");
+
+        int usedChars = 0;
+        for (int i = 0; i < references.size(); i++) {
+            KnowledgeSearchResultVO item = references.get(i);
+            String sourceContent = StringUtils.hasText(item.getParentContent())
+                    ? item.getParentContent()
+                    : item.getContent();
+            String clippedContent = clipText(sourceContent, MAX_REFERENCE_CHARS);
+
+            String referenceText = new StringBuilder()
+                    .append("【资料 ")
+                    .append(i + 1)
+                    .append("】\n")
+                    .append("版本：")
+                    .append(nullToEmpty(item.getVersionNo()))
+                    .append("\n")
+                    .append("模块：")
+                    .append(nullToEmpty(item.getModuleName()))
+                    .append("(")
+                    .append(nullToEmpty(item.getModuleCode()))
+                    .append(")\n")
+                    .append("章节：")
+                    .append(StringUtils.hasText(item.getParentSectionTitle())
+                            ? item.getParentSectionTitle()
+                            : nullToEmpty(item.getSectionTitle()))
+                    .append("\n")
+                    .append("相似度分数：")
+                    .append(item.getScore())
+                    .append("\n")
+                    .append("内容：\n")
+                    .append(clippedContent)
+                    .append("\n\n")
+                    .toString();
+
+            if (usedChars + referenceText.length() > MAX_CONTEXT_CHARS) {
+                break;
+            }
+
+            prompt.append(referenceText);
+            usedChars += referenceText.length();
+        }
+
+        prompt.append("""
+
+                【回答要求】
+                1. 直接回答问题，不要输出 JSON。
+                2. 结论必须能从知识库资料中找到依据。
+                3. 如果资料之间存在冲突，请说明冲突点。
+                4. 如果资料不足，请不要猜测。
+                """);
+
+        return prompt.toString();
+    }
+
+    private String buildRagAnswerBizId(KnowledgeSearchRequest request) {
+        return request.getProjectId() + ":" + Math.abs(request.getQuery().hashCode());
+    }
+
+    private String clipText(String value, int maxChars) {
+        if (!StringUtils.hasText(value)) {
+            return "";
+        }
+
+        if (value.length() <= maxChars) {
+            return value;
+        }
+
+        return value.substring(0, maxChars) + "\n……（内容过长，已截断）";
     }
 
     private Integer normalizeTopK(Integer topK) {
