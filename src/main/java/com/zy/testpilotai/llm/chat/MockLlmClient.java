@@ -22,6 +22,10 @@ public class MockLlmClient implements LlmClient {
     @Override
     public String chat(String systemPrompt, String userPrompt) {
 
+        if (userPrompt != null && userPrompt.contains("【切块策略输出 JSON 格式】")) {
+            return mockChunkStrategy(userPrompt);
+        }
+
         if (userPrompt != null && userPrompt.contains("【AI应用测试用例输出 JSON 格式】")) {
             return mockAiAppTestCaseResult();
         }
@@ -43,6 +47,37 @@ public class MockLlmClient implements LlmClient {
         }
 
         return mockGenerateResult();
+    }
+
+    private String mockChunkStrategy(String userPrompt) {
+        if (userPrompt != null
+                && (userPrompt.contains("msgId")
+                || userPrompt.contains("transcribeType")
+                || userPrompt.contains("TransStatus"))) {
+            return """
+                    {
+                      "documentType": "protocol",
+                      "parentRules": ["markdown_heading_1_to_3", "coarse_number_heading", "chapter_heading"],
+                      "childRules": ["markdown_subheading", "message_id_block", "enum_heading", "json_block", "paragraph", "sentence", "length_window"],
+                      "maxParentChars": 5000,
+                      "maxChildChars": 1200,
+                      "overlapChars": 200,
+                      "preserveBlocks": ["json", "code", "table"]
+                    }
+                    """;
+        }
+
+        return """
+                {
+                  "documentType": "generic",
+                  "parentRules": ["markdown_heading_1_to_3", "coarse_number_heading", "chapter_heading"],
+                  "childRules": ["markdown_subheading", "paragraph", "sentence", "length_window"],
+                  "maxParentChars": 5000,
+                  "maxChildChars": 1200,
+                  "overlapChars": 200,
+                  "preserveBlocks": ["json", "code", "table"]
+                }
+                """;
     }
 
     private String mockGenerateResult() {
